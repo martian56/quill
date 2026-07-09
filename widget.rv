@@ -8,7 +8,7 @@
 //
 //     column([label("count: ${m.count}").size(28), button("inc", "Add one")]).pad(24).gap(16)
 
-import "./lib" { Color, Rect }
+import "./lib" { Color, Rect, Theme }
 import std/string
 import std/collections { Map }
 
@@ -176,6 +176,35 @@ fun image(handle: Int, w: Int, h: Int) -> Widget {
 // A thin horizontal rule that stretches across its container.
 fun divider() -> Widget {
     return _leaf(WidgetKind.Divider)
+}
+
+// A tab bar built from buttons: the active tab is filled with the accent, the
+// rest are muted. Clicking a tab sends Click("<id>:<label>"), so update can set
+// the active tab (see tab_of to read the label back).
+fun tabs(id: String, active: String, labels: List<String>, theme: Theme) -> Widget {
+    let items: List<Widget> = []
+    let i = 0
+    while i < labels.len() {
+        let lbl = labels[i]
+        let b = button("${id}:${lbl}", lbl)
+        if lbl == active {
+            b = b.bg(theme.accent).color(theme.on_accent)
+        } else {
+            b = b.bg(theme.surface).color(theme.muted)
+        }
+        items.push(b)
+        i = i + 1
+    }
+    return row(items).gap(4)
+}
+
+// The tab label from a "<id>:<label>" click id, for use in update.
+fun tab_of(click_id: String) -> String {
+    let n = click_id.index_of(":")
+    if n < 0 {
+        return ""
+    }
+    return click_id.substring(n + 1, click_id.length())
 }
 
 // Chained modifiers. Each mutates and returns the node, so they compose:

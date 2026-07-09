@@ -1,5 +1,5 @@
 import "../lib" { Font, Color, Image, Theme, WindowConfig }
-import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, radio, slider, dropdown, image, divider }
+import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, radio, slider, dropdown, image, divider, tabs, tab_of }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -12,6 +12,7 @@ struct Model {
     item_size: Int,
     newest_first: Bool,
     priority: String,
+    side_tab: String,
     logo: Image,
     font: Font,
     theme: Theme,
@@ -42,6 +43,7 @@ fun showcase_init() -> Model {
         item_size: 18,
         newest_first: true,
         priority: "Medium",
+        side_tab: "Settings",
         logo,
         font,
         theme: Theme.dark(font),
@@ -91,6 +93,10 @@ fun _on_click(m: Model, id: String) -> Model {
     }
     if id == "sort_old" {
         m.newest_first = false
+        return m
+    }
+    if id.starts_with("side:") {
+        m.side_tab = tab_of(id)
         return m
     }
     if id == "about" {
@@ -198,35 +204,55 @@ fun swatch(c: Color) -> Widget {
     return label("").bg(c).width(42).height(42).rounded(8)
 }
 
+fun side_info(m: Model) -> Widget {
+    return column(
+        [
+            label("a GUI toolkit for Raven").size(14).color(m.theme.muted),
+            row(
+                [
+                    swatch(m.theme.accent),
+                    swatch(m.theme.field),
+                    swatch(m.theme.text),
+                    swatch(m.theme.muted),
+                ],
+            ).gap(8),
+            label("flex layout and alignment").size(15).color(m.theme.muted),
+            label("text, input, keyboard").size(15).color(m.theme.muted),
+            label("scrolling, modals, images").size(15).color(m.theme.muted),
+        ],
+    ).gap(12)
+}
+
+fun side_settings(m: Model) -> Widget {
+    return column(
+        [
+            checkbox("show_count", m.show_count, "Show item count").size(16),
+            checkbox("theme", m.dark, "Dark theme").size(16),
+            radio("sort_new", m.newest_first, "Newest first").size(16),
+            radio("sort_old", !m.newest_first, "Oldest first").size(16),
+            label("Priority").size(15).color(m.theme.muted),
+            dropdown("priority", m.priority, ["Low", "Medium", "High"]).size(16),
+            label("Text size: ${m.item_size}").size(15).color(m.theme.muted),
+            slider("item_size", m.item_size, 14, 30),
+        ],
+    ).gap(12)
+}
+
 fun sidebar(m: Model) -> Widget {
+    let content = side_settings(m)
+    if m.side_tab == "Info" {
+        content = side_info(m)
+    }
     return panel(
         column(
             [
                 row([image(m.logo.id, 48, 48), label("quill").size(30)]).gap(14).align(Align.Center),
-                label("a GUI toolkit for Raven").size(14).color(m.theme.muted),
-                row(
-                    [
-                        swatch(m.theme.accent),
-                        swatch(m.theme.field),
-                        swatch(m.theme.text),
-                        swatch(m.theme.muted),
-                    ],
-                ).gap(8),
-                label("flex layout and alignment").size(15).color(m.theme.muted),
-                label("text, input, keyboard").size(15).color(m.theme.muted),
-                label("scrolling, modals, images").size(15).color(m.theme.muted),
+                tabs("side", m.side_tab, ["Info", "Settings"], m.theme),
                 divider(),
-                checkbox("show_count", m.show_count, "Show item count").size(16),
-                checkbox("theme", m.dark, "Dark theme").size(16),
-                radio("sort_new", m.newest_first, "Newest first").size(16),
-                radio("sort_old", !m.newest_first, "Oldest first").size(16),
-                label("Priority").size(15).color(m.theme.muted),
-                dropdown("priority", m.priority, ["Low", "Medium", "High"]).size(16),
-                label("Text size: ${m.item_size}").size(15).color(m.theme.muted),
-                slider("item_size", m.item_size, 14, 30),
+                content,
                 button("about", "About").width(120),
             ],
-        ).gap(12),
+        ).gap(14),
     ).bg(m.theme.surface).rounded(16).pad(22).width(300)
 }
 
