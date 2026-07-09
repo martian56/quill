@@ -11,6 +11,83 @@
 // Bring up the GL 3.3 core renderer once a context is current (c/render.c).
 extern int q_render_init(void);
 
+// Typed characters and edit keys are delivered through GLFW callbacks (C to C,
+// which import-only FFI allows) into ring buffers that Raven drains each frame.
+#define QCAP 256
+static unsigned int char_q[QCAP];
+static int char_head, char_tail;
+static int key_q[QCAP];
+static int key_head, key_tail;
+
+static void char_cb(GLFWwindow *win, unsigned int codepoint) {
+    (void)win;
+    int next = (char_tail + 1) % QCAP;
+    if (next != char_head) {
+        char_q[char_tail] = codepoint;
+        char_tail = next;
+    }
+}
+
+static void key_cb(GLFWwindow *win, int key, int scancode, int action, int mods) {
+    (void)win;
+    (void)scancode;
+    (void)mods;
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        int next = (key_tail + 1) % QCAP;
+        if (next != key_head) {
+            key_q[key_tail] = key;
+            key_tail = next;
+        }
+    }
+}
+
+int64_t q_poll_char(void) {
+    if (char_head == char_tail) {
+        return -1;
+    }
+    unsigned int cp = char_q[char_head];
+    char_head = (char_head + 1) % QCAP;
+    return (int64_t)cp;
+}
+
+int64_t q_poll_key(void) {
+    if (key_head == key_tail) {
+        return -1;
+    }
+    int k = key_q[key_head];
+    key_head = (key_head + 1) % QCAP;
+    return (int64_t)k;
+}
+
+// Encode a Unicode codepoint as a UTF-8 C string. The buffer is reused, so the
+// caller must copy the result before the next call (Raven's from_cstr does).
+const char *q_char_utf8(int64_t codepoint) {
+    static char b[5];
+    unsigned int c = (unsigned int)codepoint;
+    int n = 0;
+    if (c < 0x80) {
+        b[0] = (char)c;
+        n = 1;
+    } else if (c < 0x800) {
+        b[0] = (char)(0xC0 | (c >> 6));
+        b[1] = (char)(0x80 | (c & 0x3F));
+        n = 2;
+    } else if (c < 0x10000) {
+        b[0] = (char)(0xE0 | (c >> 12));
+        b[1] = (char)(0x80 | ((c >> 6) & 0x3F));
+        b[2] = (char)(0x80 | (c & 0x3F));
+        n = 3;
+    } else {
+        b[0] = (char)(0xF0 | (c >> 18));
+        b[1] = (char)(0x80 | ((c >> 12) & 0x3F));
+        b[2] = (char)(0x80 | ((c >> 6) & 0x3F));
+        b[3] = (char)(0x80 | (c & 0x3F));
+        n = 4;
+    }
+    b[n] = 0;
+    return b;
+}
+
 int64_t q_init(void) {
     return glfwInit();
 }
@@ -31,6 +108,8 @@ int64_t q_window_open(int64_t width, int64_t height, const char *title) {
     }
     glfwMakeContextCurrent(win);
     glfwSwapInterval(1);
+    glfwSetCharCallback(win, char_cb);
+    glfwSetKeyCallback(win, key_cb);
     if (q_render_init() != 0) {
         glfwDestroyWindow(win);
         return 0;

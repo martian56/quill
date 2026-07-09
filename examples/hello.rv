@@ -1,25 +1,33 @@
 import "../lib" { Font, Theme, WindowConfig }
-import "../widget" { Widget, UiEvent, UiApp, column, row, panel, label, button, run_ui }
+import "../widget" { Widget, UiEvent, UiApp, column, row, panel, label, button, input, run_ui }
 
 struct Model {
     count: Int,
+    name: String,
     theme: Theme,
 }
 
 fun hello_init() -> Model {
     let font = Font.load("assets/fonts/Go-Regular.ttf")
-    return Model { count: 0, theme: Theme.dark(font) }
+    return Model { count: 0, name: "", theme: Theme.dark(font) }
 }
 
 fun _on_click(m: Model, id: String) -> Model {
     if id == "inc" {
-        return Model { count: m.count + 1, theme: m.theme }
+        return Model { count: m.count + 1, name: m.name, theme: m.theme }
     }
     if id == "dec" {
-        return Model { count: m.count - 1, theme: m.theme }
+        return Model { count: m.count - 1, name: m.name, theme: m.theme }
     }
     if id == "reset" {
-        return Model { count: 0, theme: m.theme }
+        return Model { count: 0, name: m.name, theme: m.theme }
+    }
+    return m
+}
+
+fun _on_input(m: Model, id: String, s: String) -> Model {
+    if id == "name" {
+        return Model { count: m.count, name: s, theme: m.theme }
     }
     return m
 }
@@ -27,6 +35,7 @@ fun _on_click(m: Model, id: String) -> Model {
 fun hello_update(m: Model, e: UiEvent) -> Model {
     return match e {
         Click(id) -> _on_click(m, id),
+        Input(id, s) -> _on_input(m, id, s),
         Tick -> m,
     }
 }
@@ -43,12 +52,31 @@ fun counter_card(m: Model) -> Widget {
     ).bg(m.theme.surface).rounded(16).pad(22)
 }
 
+fun greeting(m: Model) -> String {
+    if m.name == "" {
+        return "type your name above"
+    }
+    return "Hello, ${m.name}!"
+}
+
+fun name_card(m: Model) -> Widget {
+    return panel(
+        column(
+            [
+                label("Your name").size(22),
+                input("name", m.name).size(20).width(320),
+                label(greeting(m)).size(18).color(m.theme.muted),
+            ],
+        ).gap(12),
+    ).bg(m.theme.surface).rounded(16).pad(22)
+}
+
 fun hello_view(m: Model) -> Widget {
     return column(
         [
             label("quill").size(38),
-            label("click the buttons").size(17).color(m.theme.muted),
-            counter_card(m),
+            label("click the buttons and type in the field").size(17).color(m.theme.muted),
+            row([counter_card(m), name_card(m)]).gap(20),
             button("reset", "Reset").width(160),
         ],
     ).pad(28).gap(18)
@@ -59,7 +87,7 @@ fun hello_theme(m: Model) -> Theme {
 }
 
 fun hello_main() -> Bool {
-    let win = WindowConfig.new().size(960, 600).title("quill: counter")
+    let win = WindowConfig.new().size(960, 600).title("quill: widgets")
     return run_ui<Model>(
         UiApp {
             init: hello_init,

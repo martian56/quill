@@ -12,18 +12,26 @@
 //     }
 
 import "./lib" { Frame, Rect, Color, Font, Text, Theme, Window, WindowConfig, start, stop }
+import std/string
 
 const BUTTON_PAD_X: Int = 16
 const BUTTON_PAD_Y: Int = 9
 const BUTTON_RADIUS: Int = 8
+const INPUT_PAD_X: Int = 12
+const INPUT_PAD_Y: Int = 9
+const INPUT_RADIUS: Int = 8
+const INPUT_MIN_W: Int = 160
+const KEY_BACKSPACE: Int = 259
 
-// What a node is. Containers carry children; leaves carry their content.
+// What a node is. Containers carry children; leaves carry their content. Button
+// and Input carry an id; Input also carries its current text.
 enum WidgetKind {
     Column,
     Row,
     Panel,
     Label(String),
     Button(String, String),
+    Input(String, String),
 }
 
 // One node of the UI tree. Style is set with the chained modifiers below; mw/mh
@@ -87,6 +95,12 @@ fun label(text: String) -> Widget {
 
 fun button(id: String, text: String) -> Widget {
     return _leaf(WidgetKind.Button(id, text))
+}
+
+// A single-line text field. value is the current text (from the model); the
+// framework edits it and sends UiEvent.Input(id, new_value).
+fun input(id: String, value: String) -> Widget {
+    return _leaf(WidgetKind.Input(id, value))
 }
 
 // Chained modifiers. Each mutates and returns the node, so they compose:
@@ -155,6 +169,14 @@ fun measure(w: Widget, theme: Theme) {
         Button(id, text) -> {
             w.mw = theme.font.width(w.tsize, text) + 2 * BUTTON_PAD_X
             w.mh = theme.font.line_height(w.tsize) + 2 * BUTTON_PAD_Y
+        },
+        Input(id, value) -> {
+            let content = theme.font.width(w.tsize, value) + 2 * INPUT_PAD_X + 24
+            w.mw = content
+            if content < INPUT_MIN_W {
+                w.mw = INPUT_MIN_W
+            }
+            w.mh = theme.font.line_height(w.tsize) + 2 * INPUT_PAD_Y
         },
         Column -> {
             let total = 0
@@ -336,35 +358,43 @@ fun _paint_bg(w: Widget, f: Frame) {
     return
 }
 
-// The mouse state paint reads for hover and press feedback. Build _inert() when
-// there is no interaction (a plain render).
-struct Pointer {
+// The interaction state paint reads for hover, press, and focus feedback. Build
+// _inert() when there is no interaction (a plain render).
+struct Interaction {
     x: Int,
     y: Int,
     down: Bool,
+    focus: String?,
 }
 
-fun _inert() -> Pointer {
-    return Pointer { x: -1, y: -1, down: false }
+fun _inert() -> Interaction {
+    return Interaction { x: -1, y: -1, down: false, focus: None }
 }
 
 fun _contains(r: Rect, x: Int, y: Int) -> Bool {
     return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
 }
 
-fun _button_bg(w: Widget, theme: Theme, ptr: Pointer) -> Color {
+fun _button_bg(w: Widget, theme: Theme, it: Interaction) -> Color {
     let base = _fill_or(w, theme.accent)
-    if !_contains(w.box, ptr.x, ptr.y) {
+    if !_contains(w.box, it.x, it.y) {
         return base
     }
-    if ptr.down {
+    if it.down {
         return base.darken(12)
     }
     return base.lighten(12)
 }
 
-// Walk the laid-out tree and draw it, applying pointer feedback to buttons.
-fun paint(w: Widget, f: Frame, theme: Theme, ptr: Pointer) {
+fun _is_focused(it: Interaction, id: String) -> Bool {
+    return match it.focus {
+        Some(fid) -> fid == id,
+        None -> false,
+    }
+}
+
+// Walk the laid-out tree and draw it, applying interaction feedback.
+fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
     match w.kind {
         Label(text) -> {
             _paint_bg(w, f)
@@ -372,7 +402,7 @@ fun paint(w: Widget, f: Frame, theme: Theme, ptr: Pointer) {
             f.text(Text.new(theme.font, text).at(w.box.x, w.box.y).size(w.tsize).color(col))
         },
         Button(id, text) -> {
-            let bgc = _button_bg(w, theme, ptr)
+            let bgc = _button_bg(w, theme, it)
             f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, BUTTON_RADIUS, bgc)
             let tw = theme.font.width(w.tsize, text)
             let lh = theme.font.line_height(w.tsize)
@@ -381,11 +411,14 @@ fun paint(w: Widget, f: Frame, theme: Theme, ptr: Pointer) {
             let col = _tint_or(w, theme.on_accent)
             f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
         },
+        Input(id, value) -> {
+            _paint_input(w, f, theme, id, value, _is_focused(it, id))
+        },
         _ -> {
             _paint_bg(w, f)
             let i = 0
             while i < w.kids.len() {
-                paint(w.kids[i], f, theme, ptr)
+                paint(w.kids[i], f, theme, it)
                 i = i + 1
             }
         },
@@ -393,14 +426,32 @@ fun paint(w: Widget, f: Frame, theme: Theme, ptr: Pointer) {
     return
 }
 
-// The id of the topmost button under (x, y), if any.
-fun _hit(w: Widget, x: Int, y: Int) -> String? {
+fun _paint_input(w: Widget, f: Frame, theme: Theme, id: String, value: String, focused: Bool) {
+    f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, INPUT_RADIUS, _fill_or(w, theme.field))
+    let lh = theme.font.line_height(w.tsize)
+    let tx = w.box.x + INPUT_PAD_X
+    let ty = w.box.y + (w.box.h - lh) / 2
+    f.text(Text.new(theme.font, value).at(tx, ty).size(w.tsize).color(theme.text))
+    if focused {
+        let caret = tx + theme.font.width(w.tsize, value) + 1
+        f.rect(caret, ty, 2, lh, theme.accent)
+    }
+    return
+}
+
+// A hit-tested target: an interactive widget's id and whether it is an input.
+struct Hit {
+    id: String,
+    input: Bool,
+}
+
+// The topmost interactive widget under (x, y), if any.
+fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
     let i = 0
     while i < w.kids.len() {
-        let r = _hit(w.kids[i], x, y)
-        match r {
-            Some(id) -> {
-                return Some(id)
+        match _hit(w.kids[i], x, y) {
+            Some(h) -> {
+                return Some(h)
             },
             None -> {},
         }
@@ -409,12 +460,64 @@ fun _hit(w: Widget, x: Int, y: Int) -> String? {
     match w.kind {
         Button(id, text) -> {
             if _contains(w.box, x, y) {
-                return Some(id)
+                return Some(Hit { id, input: false })
+            }
+        },
+        Input(id, value) -> {
+            if _contains(w.box, x, y) {
+                return Some(Hit { id, input: true })
             }
         },
         _ -> {},
     }
     return None
+}
+
+// The current text of the input with this id, if present in the tree.
+fun _find_input_value(w: Widget, id: String) -> String? {
+    match w.kind {
+        Input(iid, value) -> {
+            if iid == id {
+                return Some(value)
+            }
+        },
+        _ -> {},
+    }
+    let i = 0
+    while i < w.kids.len() {
+        match _find_input_value(w.kids[i], id) {
+            Some(v) -> {
+                return Some(v)
+            },
+            None -> {},
+        }
+        i = i + 1
+    }
+    return None
+}
+
+// Drop the last UTF-8 character, skipping continuation bytes so multi-byte
+// characters are removed whole.
+fun _drop_last(s: String) -> String {
+    let n = s.length()
+    if n == 0 {
+        return s
+    }
+    let cut = n - 1
+    let scanning = true
+    while scanning {
+        if cut == 0 {
+            scanning = false
+        } else {
+            let b = s.byte_at(cut)
+            if b >= 128 && b < 192 {
+                cut = cut - 1
+            } else {
+                scanning = false
+            }
+        }
+    }
+    return s.substring(0, cut)
 }
 
 fun _fill_or(w: Widget, fallback: Color) -> Color {
@@ -434,10 +537,12 @@ fun render(f: Frame, theme: Theme, root: Widget) {
 }
 
 // What a widget app's update reacts to. Click carries the id of the button
-// pressed and released over the same spot.
+// pressed and released over the same spot. Input carries a focused field's id
+// and its new text after typing or backspace.
 enum UiEvent {
     Tick,
     Click(String),
+    Input(String, String),
 }
 
 // A widget application: view returns a tree, update folds events into the model,
@@ -480,6 +585,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
 
     let was_down = false
     let pressed: String? = None
+    let focused: String? = None
     let running = true
     while running {
         if win.should_close() {
@@ -489,15 +595,29 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         let my = win.mouse_y()
         let down = win.mouse_down()
         if down && !was_down {
-            pressed = _hit(last, mx, my)
+            match _hit(last, mx, my) {
+                Some(h) -> {
+                    if h.input {
+                        focused = Some(h.id)
+                        pressed = None
+                    } else {
+                        pressed = Some(h.id)
+                        focused = None
+                    }
+                },
+                None -> {
+                    pressed = None
+                    focused = None
+                },
+            }
         }
         if was_down && !down {
-            let released = _hit(last, mx, my)
-            model = _dispatch_click(model, update_fn, pressed, released)
+            model = _dispatch_click(model, update_fn, pressed, _hit_id(last, mx, my))
             pressed = None
         }
         was_down = down
 
+        model = _drain_input(model, update_fn, win, last, focused)
         model = update_fn(model, UiEvent.Tick)
 
         let theme = theme_of(model)
@@ -505,7 +625,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         _layout(tree, theme, win)
         let f = win.begin()
         f.clear(theme.bg)
-        paint(tree, f, theme, Pointer { x: mx, y: my, down })
+        paint(tree, f, theme, Interaction { x: mx, y: my, down, focus: focused })
         win.present()
         last = tree
     }
@@ -513,6 +633,78 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
     win.close()
     stop()
     return true
+}
+
+// The id of a button under (x, y), ignoring inputs, for click release matching.
+fun _hit_id(w: Widget, x: Int, y: Int) -> String? {
+    return match _hit(w, x, y) {
+        Some(h) -> {
+            if h.input {
+                None
+            } else {
+                Some(h.id)
+            }
+        },
+        None -> None,
+    }
+}
+
+// Fold this frame's typed characters and backspaces into the focused input as a
+// single Input event carrying the new value.
+fun _drain_input<M>(
+    model: M,
+    update_fn: fun(M, UiEvent) -> M,
+    win: Window,
+    last: Widget,
+    focused: String?,
+) -> M {
+    match focused {
+        Some(fid) -> {
+            let cur = match _find_input_value(last, fid) {
+                Some(v) -> v,
+                None -> "",
+            }
+            let changed = false
+            let c = win.poll_char()
+            while c >= 0 {
+                if c >= 32 {
+                    cur = cur.concat(win.char_utf8(c))
+                    changed = true
+                }
+                c = win.poll_char()
+            }
+            let k = win.poll_key()
+            while k >= 0 {
+                if k == KEY_BACKSPACE {
+                    cur = _drop_last(cur)
+                    changed = true
+                }
+                k = win.poll_key()
+            }
+            if changed {
+                return update_fn(model, UiEvent.Input(fid, cur))
+            }
+            return model
+        },
+        None -> {
+            _flush_input(win)
+            return model
+        },
+    }
+    return model
+}
+
+// Empty the input queues when nothing is focused, so keys do not pile up.
+fun _flush_input(win: Window) {
+    let c = win.poll_char()
+    while c >= 0 {
+        c = win.poll_char()
+    }
+    let k = win.poll_key()
+    while k >= 0 {
+        k = win.poll_key()
+    }
+    return
 }
 
 fun _dispatch_click<M>(

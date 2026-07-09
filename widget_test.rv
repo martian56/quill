@@ -1,6 +1,6 @@
 import std/test { assert_eq, assert_true, assert_false }
 import "./lib" { Theme, Font, Rect }
-import "./widget" { Widget, column, row, button, measure, arrange, _hit }
+import "./widget" { Widget, column, row, button, measure, arrange, _hit, _drop_last }
 
 // A fixed-size leaf that needs no font, so layout is testable headlessly.
 fun fixed(w: Int, h: Int) -> Widget {
@@ -54,19 +54,28 @@ fun test_hit_finds_button_by_box() {
     let b = button("go", "Go")
     b.box = Rect { x: 10, y: 10, w: 100, h: 40 }
     match _hit(b, 50, 30) {
-        Some(id) -> {
-            assert_eq(id, "go")
+        Some(h) -> {
+            assert_eq(h.id, "go")
+            assert_false(h.input)
         },
         None -> {
             assert_true(false)
         },
     }
     match _hit(b, 200, 200) {
-        Some(id) -> {
+        Some(h) -> {
             assert_false(true)
         },
         None -> {
             assert_true(true)
         },
     }
+}
+
+fun test_drop_last_handles_utf8() {
+    assert_eq(_drop_last("abc"), "ab")
+    assert_eq(_drop_last("a"), "")
+    assert_eq(_drop_last(""), "")
+    // é is two bytes in UTF-8; backspace removes the whole character.
+    assert_eq(_drop_last("café"), "caf")
 }

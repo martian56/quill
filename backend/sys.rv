@@ -1,7 +1,7 @@
 // Bindings for c/quill.c. This is the only module that declares the extern
 // symbols; everything else goes through these wrappers.
 
-import std/ffi { to_cstr, free_cstr }
+import std/ffi { to_cstr, free_cstr, from_cstr }
 
 extern "C" {
     fun q_init() -> Int
@@ -27,6 +27,9 @@ extern "C" {
     fun q_text(font: Int, x: Int, y: Int, px: Int, str: CStr, r: Int, g: Int, b: Int, a: Int)
     fun q_measure_width(font: Int, px: Int, str: CStr) -> Int
     fun q_line_height(font: Int, px: Int) -> Int
+    fun q_poll_char() -> Int
+    fun q_poll_key() -> Int
+    fun q_char_utf8(codepoint: Int) -> CStr
 }
 
 fun backend_init() -> Bool {
@@ -144,4 +147,18 @@ fun measure_width(font: Int, px: Int, s: String) -> Int {
 
 fun line_height(font: Int, px: Int) -> Int {
     return q_line_height(font, px)
+}
+
+// Next typed character's codepoint, or -1 when the queue is empty.
+fun poll_char() -> Int {
+    return q_poll_char()
+}
+
+// Next pressed edit key (a GLFW key code), or -1 when the queue is empty.
+fun poll_key() -> Int {
+    return q_poll_key()
+}
+
+fun char_utf8(codepoint: Int) -> String {
+    return from_cstr(q_char_utf8(codepoint))
 }
