@@ -7,6 +7,7 @@ extern "C" {
     fun q_init() -> Int
     fun q_terminate()
     fun q_window_open(width: Int, height: Int, title: CStr) -> Int
+    fun q_window_icon(win: Int, path: CStr) -> Int
     fun q_window_should_close(win: Int) -> Int
     fun q_poll()
     fun q_window_swap(win: Int)
@@ -57,6 +58,13 @@ fun open_window(width: Int, height: Int, title: String) -> Int {
     let win = q_window_open(width, height, c)
     free_cstr(c)
     return win
+}
+
+fun set_window_icon(win: Int, path: String) -> Bool {
+    let c = to_cstr(path)
+    let ok = q_window_icon(win, c)
+    free_cstr(c)
+    return ok == 1
 }
 
 fun window_should_close(win: Int) -> Bool {

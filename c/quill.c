@@ -4,6 +4,8 @@
 #include <stdint.h>
 
 #include "glfw/include/GLFW/glfw3.h"
+#include "stb_image.h"
+#include "icon_data.h"
 
 #define WIN(h) ((GLFWwindow *)(intptr_t)(h))
 #define H(p) ((int64_t)(intptr_t)(p))
@@ -121,6 +123,39 @@ void q_terminate(void) {
     glfwTerminate();
 }
 
+static void apply_icon(GLFWwindow *win, unsigned char *px, int w, int h) {
+    GLFWimage img;
+    img.width = w;
+    img.height = h;
+    img.pixels = px;
+    glfwSetWindowIcon(win, 1, &img);
+}
+
+// The bundled quill mark, shown in the title bar and taskbar unless the app sets
+// its own with q_window_icon.
+static void set_default_icon(GLFWwindow *win) {
+    int w, h, n;
+    unsigned char *px = stbi_load_from_memory(q_icon_png, (int)q_icon_png_len, &w, &h, &n, 4);
+    if (!px) {
+        return;
+    }
+    apply_icon(win, px, w, h);
+    stbi_image_free(px);
+}
+
+// Replace the window icon from a PNG or JPEG on disk. Returns 1 on success, 0 if
+// the file could not be read, in which case the default icon stays.
+int64_t q_window_icon(int64_t win, const char *path) {
+    int w, h, n;
+    unsigned char *px = stbi_load(path, &w, &h, &n, 4);
+    if (!px) {
+        return 0;
+    }
+    apply_icon(WIN(win), px, w, h);
+    stbi_image_free(px);
+    return 1;
+}
+
 int64_t q_window_open(int64_t width, int64_t height, const char *title) {
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -136,6 +171,7 @@ int64_t q_window_open(int64_t width, int64_t height, const char *title) {
     glfwSetCharCallback(win, char_cb);
     glfwSetKeyCallback(win, key_cb);
     glfwSetScrollCallback(win, scroll_cb);
+    set_default_icon(win);
     if (q_render_init() != 0) {
         glfwDestroyWindow(win);
         return 0;

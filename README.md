@@ -132,6 +132,10 @@ state in one value that is easy to reason about, snapshot, and test.
 font. Widgets read the theme, so an app looks consistent with no per-widget styling.
 Switching a field in the model and rebuilding the theme flips the whole UI at runtime.
 
+**Window icon.** Every quill window ships with the quill mark as its title-bar and
+taskbar icon. Override it with your own PNG:
+`WindowConfig.new().size(960, 600).icon("assets/icon.png")`.
+
 ## Widgets
 
 Import these from `github.com/martian56/quill/widget`.
