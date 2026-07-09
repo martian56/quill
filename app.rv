@@ -47,9 +47,12 @@ fun _layout(tree: Widget, theme: Theme, win: Window) {
     return
 }
 
-// Open the window and run the widget app: poll the mouse, hit-test the laid-out
-// tree, dispatch Click, Input, and Tick into update, and paint each frame with
-// hover, press, and focus feedback. Returns false if the backend cannot start.
+// Open the window and run the widget app. The loop is event driven: it sleeps
+// until input arrives, so an idle app uses no CPU, and wakes a few times a second
+// only while a field is focused, to blink the caret. Each wake polls the mouse,
+// hit-tests the laid-out tree, dispatches Click, Input, and Tick into update, and
+// repaints with hover, press, and focus feedback. Returns false if the backend
+// cannot start.
 fun run_ui<M>(app: UiApp<M>) -> Bool {
     if !start() {
         return false
@@ -60,20 +63,19 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         return false
     }
 
-    let init_fn = app.init
     let update_fn = app.update
     let view_fn = app.view
     let theme_of = app.theme
 
-    let model = init_fn()
-    let last = view_fn(model)
-    _layout(last, theme_of(model), win)
+    let model = (app.init)()
+    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None)
 
     let was_down = false
     let pressed: String? = None
     let focused: String? = None
     let running = true
     while running {
+        win.wait(_idle_timeout(focused))
         if win.should_close() {
             running = false
         }
@@ -106,19 +108,43 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         model = _drain_input(model, update_fn, win, last, focused)
         model = update_fn(model, UiEvent.Tick)
 
-        let theme = theme_of(model)
-        let tree = view_fn(model)
-        _layout(tree, theme, win)
-        let f = win.begin()
-        f.clear(theme.bg)
-        paint(tree, f, theme, Interaction { x: mx, y: my, down, focus: focused })
-        win.present()
-        last = tree
+        last = _draw(win, view_fn, theme_of, model, mx, my, down, focused)
     }
 
     win.close()
     stop()
     return true
+}
+
+// Sleep with no timeout when idle; wake ~twice a second while a field is focused
+// so its caret can blink.
+fun _idle_timeout(focused: String?) -> Int {
+    return match focused {
+        Some(f) -> 500,
+        None -> 0,
+    }
+}
+
+// Build, lay out, and paint one frame; returns the laid-out tree for hit-testing.
+fun _draw<M>(
+    win: Window,
+    view_fn: fun(M) -> Widget,
+    theme_of: fun(M) -> Theme,
+    model: M,
+    mx: Int,
+    my: Int,
+    down: Bool,
+    focused: String?,
+) -> Widget {
+    let theme = theme_of(model)
+    let tree = view_fn(model)
+    _layout(tree, theme, win)
+    let f = win.begin()
+    f.clear(theme.bg)
+    let caret_on = (win.time_ms() / 530) % 2 == 0
+    paint(tree, f, theme, Interaction { x: mx, y: my, down, focus: focused, caret_on })
+    win.present()
+    return tree
 }
 
 // The id of a button under (x, y), ignoring inputs, for click release matching.

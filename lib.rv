@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, poll_char, poll_key, char_utf8, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, take_scroll_y, wait_events, time_ms, poll_char, poll_key, char_utf8, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -320,6 +320,7 @@ fun stop() {
 //         let f = win.begin()
 //         f.clear(Color.rgb(20, 22, 28))
 //         win.present()
+//         win.wait(0)
 //     }
 //     win.close()
 //     stop()
@@ -375,6 +376,29 @@ impl Window {
         return char_utf8(codepoint)
     }
 
+    // Pixels scrolled vertically since the last call, then reset.
+    fun scroll_y(self) -> Int {
+        return take_scroll_y()
+    }
+
+    // Milliseconds since startup, for animation timing.
+    fun time_ms(self) -> Int {
+        return time_ms()
+    }
+
+    // Sleep until an event arrives (timeout_ms <= 0) or the timeout elapses,
+    // then process input. Lets an idle app rest instead of spinning.
+    fun wait(self, timeout_ms: Int) {
+        wait_events(timeout_ms)
+        return
+    }
+
+    // Pump pending input without blocking.
+    fun poll(self) {
+        poll_events()
+        return
+    }
+
     // Start a frame, returning the surface to draw on.
     fun begin(self) -> Frame {
         let w = framebuffer_width(self.handle)
@@ -383,11 +407,10 @@ impl Window {
         return Frame { width: w, height: h }
     }
 
-    // Flush the frame, show it, and pump input.
+    // Flush the frame and show it. Pump input separately with wait or poll.
     fun present(self) {
         frame_end()
         swap_buffers(self.handle)
-        poll_events()
         return
     }
 

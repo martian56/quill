@@ -16,6 +16,9 @@ extern "C" {
     fun q_cursor_x(win: Int) -> Int
     fun q_cursor_y(win: Int) -> Int
     fun q_mouse_down(win: Int) -> Int
+    fun q_take_scroll_y() -> Int
+    fun q_wait(timeout_ms: Int)
+    fun q_time_ms() -> Int
     fun q_clear_rgb(r: Int, g: Int, b: Int)
     fun q_frame_begin(width: Int, height: Int)
     fun q_fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int)
@@ -86,6 +89,22 @@ fun cursor_y(win: Int) -> Int {
 
 fun mouse_down(win: Int) -> Bool {
     return q_mouse_down(win) == 1
+}
+
+// Pixels scrolled vertically since the last call, then reset.
+fun take_scroll_y() -> Int {
+    return q_take_scroll_y()
+}
+
+// Sleep until an event arrives (timeout_ms <= 0) or the timeout elapses.
+fun wait_events(timeout_ms: Int) {
+    q_wait(timeout_ms)
+    return
+}
+
+// Milliseconds since the backend started, for animation timing.
+fun time_ms() -> Int {
+    return q_time_ms()
 }
 
 fun clear_rgb(r: Int, g: Int, b: Int) {

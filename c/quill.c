@@ -41,6 +41,22 @@ static void key_cb(GLFWwindow *win, int key, int scancode, int action, int mods)
     }
 }
 
+// Accumulated vertical scroll, in wheel notches, taken and reset by Raven.
+static double scroll_y;
+
+static void scroll_cb(GLFWwindow *win, double xoff, double yoff) {
+    (void)win;
+    (void)xoff;
+    scroll_y += yoff;
+}
+
+// Vertical scroll since the last call, in pixels (a notch is 40px), then reset.
+int64_t q_take_scroll_y(void) {
+    int64_t px = (int64_t)(scroll_y * 40.0);
+    scroll_y = 0.0;
+    return px;
+}
+
 int64_t q_poll_char(void) {
     if (char_head == char_tail) {
         return -1;
@@ -110,6 +126,7 @@ int64_t q_window_open(int64_t width, int64_t height, const char *title) {
     glfwSwapInterval(1);
     glfwSetCharCallback(win, char_cb);
     glfwSetKeyCallback(win, key_cb);
+    glfwSetScrollCallback(win, scroll_cb);
     if (q_render_init() != 0) {
         glfwDestroyWindow(win);
         return 0;
@@ -123,6 +140,20 @@ int64_t q_window_should_close(int64_t win) {
 
 void q_poll(void) {
     glfwPollEvents();
+}
+
+// Block until an event arrives (timeout_ms <= 0) or the timeout elapses, then
+// process events. Lets an idle app sleep instead of spinning.
+void q_wait(int64_t timeout_ms) {
+    if (timeout_ms <= 0) {
+        glfwWaitEvents();
+    } else {
+        glfwWaitEventsTimeout((double)timeout_ms / 1000.0);
+    }
+}
+
+int64_t q_time_ms(void) {
+    return (int64_t)(glfwGetTime() * 1000.0);
 }
 
 void q_window_swap(int64_t win) {

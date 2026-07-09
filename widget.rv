@@ -364,10 +364,11 @@ struct Interaction {
     y: Int,
     down: Bool,
     focus: String?,
+    caret_on: Bool,
 }
 
 fun _inert() -> Interaction {
-    return Interaction { x: -1, y: -1, down: false, focus: None }
+    return Interaction { x: -1, y: -1, down: false, focus: None, caret_on: true }
 }
 
 fun _contains(r: Rect, x: Int, y: Int) -> Bool {
@@ -413,7 +414,7 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
             f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
         },
         Input(id, value) -> {
-            _paint_input(w, f, theme, id, value, _is_focused(it, id))
+            _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on)
         },
         _ -> {
             _paint_bg(w, f)
@@ -427,13 +428,25 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
     return
 }
 
-fun _paint_input(w: Widget, f: Frame, theme: Theme, id: String, value: String, focused: Bool) {
-    f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, INPUT_RADIUS, _fill_or(w, theme.field))
+fun _paint_input(w: Widget, f: Frame, theme: Theme, value: String, focused: Bool, caret_on: Bool) {
+    let border = theme.field
+    if focused {
+        border = theme.accent
+    }
+    f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, INPUT_RADIUS, border)
+    f.rounded_rect(
+        w.box.x + 2,
+        w.box.y + 2,
+        w.box.w - 4,
+        w.box.h - 4,
+        INPUT_RADIUS - 1,
+        theme.field,
+    )
     let lh = theme.font.line_height(w.tsize)
     let tx = w.box.x + INPUT_PAD_X
     let ty = w.box.y + (w.box.h - lh) / 2
     f.text(Text.new(theme.font, value).at(tx, ty).size(w.tsize).color(theme.text))
-    if focused {
+    if focused && caret_on {
         let caret = tx + theme.font.width(w.tsize, value) + 1
         f.rect(caret, ty, 2, lh, theme.accent)
     }
