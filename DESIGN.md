@@ -194,14 +194,14 @@ styling work.
    update. Clicking a field focuses it; GLFW char/key callbacks feed queues the
    loop drains into the focused input; the caret and hover/press feedback render.
    The counter and a text field are interactive.
-5. **Theme + polish.** NEARLY DONE. Done: an event-driven idle loop (zero CPU when
-   static), a `scroll` container, a `checkbox`, a `modal` dialog, input focus rings,
-   layout alignment (`align`/`justify`), keyboard navigation (Enter submit, Tab
-   focus, Escape blur), and light/dark themes with runtime switching. Remaining
-   before `v0.1.0`: a `slider` (drag), text selection + clipboard + caret movement,
-   and a `dropdown`. (DPI is already handled: GLFW makes the process per-monitor
-   aware, so the framebuffer is native resolution and the cursor is scaled to match
-   it.)
+5. **Theme + polish.** Done: an event-driven idle loop (zero CPU when static),
+   `scroll`, `checkbox`, `slider` (drag), `modal` dialogs, input focus rings, layout
+   alignment (`align`/`justify`), keyboard navigation (Enter/Tab/Escape), and
+   light/dark themes with runtime switching. The interaction model (click, drag,
+   type, scroll, keyboard) and layout model are complete. Remaining, additive, before
+   `v0.1.0`: text selection + clipboard + caret movement, and a `dropdown`. (DPI is
+   already handled: GLFW makes the process per-monitor aware, so the framebuffer is
+   native resolution and the cursor is scaled to match it.)
 
 ## Testing
 
