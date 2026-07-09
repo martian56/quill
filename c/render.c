@@ -1,8 +1,9 @@
-/* quill renderer: a batched 2D pipeline on OpenGL 3.3 core. Solid rectangles
- * and glyph quads share one vertex buffer and one draw call per frame. Each
- * vertex carries a mode flag: solid fills ignore the atlas texture, glyphs
- * sample its red channel as coverage. GL functions past 1.1 are loaded through
- * GLFW's cross-platform proc loader. */
+/* quill renderer: a batched 2D pipeline on OpenGL 3.3 core. Solid rectangles,
+ * rounded rectangles, and glyph quads share one vertex buffer. Each vertex
+ * carries a mode: 0 solid fill, 1 glyph (atlas red channel is coverage), 2
+ * rounded rect (a signed-distance field gives antialiased corners). Clipping
+ * uses the scissor test and flushes at each change. GL functions past 1.1 are
+ * loaded through GLFW's cross-platform proc loader. */
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -89,14 +90,17 @@ static const char *VERT_SRC =
     "layout(location=1) in vec2 a_uv;\n"
     "layout(location=2) in vec4 a_color;\n"
     "layout(location=3) in float a_mode;\n"
+    "layout(location=4) in vec4 a_rrect;\n"
     "uniform mat4 u_proj;\n"
     "out vec2 v_uv;\n"
     "out vec4 v_color;\n"
     "out float v_mode;\n"
+    "out vec4 v_rrect;\n"
     "void main() {\n"
     "    v_uv = a_uv;\n"
     "    v_color = a_color;\n"
     "    v_mode = a_mode;\n"
+    "    v_rrect = a_rrect;\n"
     "    gl_Position = u_proj * vec4(a_pos, 0.0, 1.0);\n"
     "}\n";
 
@@ -105,16 +109,31 @@ static const char *FRAG_SRC =
     "in vec2 v_uv;\n"
     "in vec4 v_color;\n"
     "in float v_mode;\n"
+    "in vec4 v_rrect;\n"
     "uniform sampler2D u_tex;\n"
     "out vec4 frag_color;\n"
+    "float sd_round_box(vec2 p, vec2 b, float r) {\n"
+    "    vec2 q = abs(p) - b + vec2(r);\n"
+    "    return min(max(q.x, q.y), 0.0) + length(max(q, vec2(0.0))) - r;\n"
+    "}\n"
     "void main() {\n"
-    "    float cov = 1.0;\n"
-    "    if (v_mode > 0.5) cov = texture(u_tex, v_uv).r;\n"
-    "    frag_color = vec4(v_color.rgb, v_color.a * cov);\n"
+    "    if (v_mode > 1.5) {\n"
+    "        vec2 b = vec2(v_rrect.x, v_rrect.y);\n"
+    "        float d = sd_round_box(v_uv, b, v_rrect.z);\n"
+    "        float aa = fwidth(d);\n"
+    "        float cov = 1.0 - smoothstep(-aa, aa, d);\n"
+    "        frag_color = vec4(v_color.rgb, v_color.a * cov);\n"
+    "    } else if (v_mode > 0.5) {\n"
+    "        float cov = texture(u_tex, v_uv).r;\n"
+    "        frag_color = vec4(v_color.rgb, v_color.a * cov);\n"
+    "    } else {\n"
+    "        frag_color = v_color;\n"
+    "    }\n"
     "}\n";
 
-#define FLOATS_PER_VERTEX 9
+#define FLOATS_PER_VERTEX 13
 #define MAX_VERTICES 65536
+#define MAX_CLIPS 16
 
 static GLuint g_program;
 static GLuint g_vao;
@@ -123,6 +142,9 @@ static GLint g_proj_loc;
 static GLuint g_atlas_tex;
 static int g_atlas_w;
 static int g_atlas_h;
+static int g_fb_h;
+static int g_clip[MAX_CLIPS][4];
+static int g_clip_n;
 static float g_verts[MAX_VERTICES * FLOATS_PER_VERTEX];
 static int g_vert_count;
 
@@ -184,6 +206,8 @@ int q_render_init(void) {
     p_glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void *)(4 * sizeof(float)));
     p_glEnableVertexAttribArray(3);
     p_glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void *)(8 * sizeof(float)));
+    p_glEnableVertexAttribArray(4);
+    p_glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, (void *)(9 * sizeof(float)));
     p_glBindVertexArray(0);
     return 0;
 }
@@ -231,6 +255,9 @@ static void flush(void) {
 }
 
 void q_frame_begin(int64_t width, int64_t height) {
+    g_fb_h = (int)height;
+    g_clip_n = 0;
+    glDisable(GL_SCISSOR_TEST);
     glViewport(0, 0, (int)width, (int)height);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -247,7 +274,8 @@ void q_frame_begin(int64_t width, int64_t height) {
 }
 
 static void push_vertex(float x, float y, float u, float v,
-                        float r, float g, float b, float a, float mode) {
+                        float r, float g, float b, float a, float mode,
+                        float hw, float hh, float radius) {
     float *p = &g_verts[g_vert_count * FLOATS_PER_VERTEX];
     p[0] = x;
     p[1] = y;
@@ -258,6 +286,10 @@ static void push_vertex(float x, float y, float u, float v,
     p[6] = b;
     p[7] = a;
     p[8] = mode;
+    p[9] = hw;
+    p[10] = hh;
+    p[11] = radius;
+    p[12] = 0.0f;
     g_vert_count++;
 }
 
@@ -267,7 +299,7 @@ void q_push_text_vertex(float x, float y, float u, float v,
     if (g_vert_count + 1 > MAX_VERTICES) {
         flush();
     }
-    push_vertex(x, y, u, v, r, g, b, a, 1.0f);
+    push_vertex(x, y, u, v, r, g, b, a, 1.0f, 0.0f, 0.0f, 0.0f);
 }
 
 void q_fill_rect(int64_t x, int64_t y, int64_t w, int64_t h,
@@ -275,20 +307,65 @@ void q_fill_rect(int64_t x, int64_t y, int64_t w, int64_t h,
     if (g_vert_count + 6 > MAX_VERTICES) {
         flush();
     }
-    float x0 = (float)x;
-    float y0 = (float)y;
-    float x1 = (float)(x + w);
-    float y1 = (float)(y + h);
-    float rf = (float)r / 255.0f;
-    float gf = (float)g / 255.0f;
-    float bf = (float)b / 255.0f;
-    float af = (float)a / 255.0f;
-    push_vertex(x0, y0, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
-    push_vertex(x1, y0, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
-    push_vertex(x1, y1, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
-    push_vertex(x0, y0, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
-    push_vertex(x1, y1, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
-    push_vertex(x0, y1, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
+    float x0 = (float)x, y0 = (float)y, x1 = (float)(x + w), y1 = (float)(y + h);
+    float rf = (float)r / 255.0f, gf = (float)g / 255.0f;
+    float bf = (float)b / 255.0f, af = (float)a / 255.0f;
+    push_vertex(x0, y0, 0, 0, rf, gf, bf, af, 0.0f, 0, 0, 0);
+    push_vertex(x1, y0, 0, 0, rf, gf, bf, af, 0.0f, 0, 0, 0);
+    push_vertex(x1, y1, 0, 0, rf, gf, bf, af, 0.0f, 0, 0, 0);
+    push_vertex(x0, y0, 0, 0, rf, gf, bf, af, 0.0f, 0, 0, 0);
+    push_vertex(x1, y1, 0, 0, rf, gf, bf, af, 0.0f, 0, 0, 0);
+    push_vertex(x0, y1, 0, 0, rf, gf, bf, af, 0.0f, 0, 0, 0);
+}
+
+void q_fill_round_rect(int64_t x, int64_t y, int64_t w, int64_t h, int64_t radius,
+                       int64_t r, int64_t g, int64_t b, int64_t a) {
+    if (g_vert_count + 6 > MAX_VERTICES) {
+        flush();
+    }
+    float x0 = (float)x, y0 = (float)y, x1 = (float)(x + w), y1 = (float)(y + h);
+    float hw = (float)w / 2.0f, hh = (float)h / 2.0f;
+    float rad = (float)radius;
+    float limit = hw < hh ? hw : hh;
+    if (rad > limit) {
+        rad = limit;
+    }
+    float rf = (float)r / 255.0f, gf = (float)g / 255.0f;
+    float bf = (float)b / 255.0f, af = (float)a / 255.0f;
+    // v_uv carries the position relative to the rect center, in pixels.
+    push_vertex(x0, y0, -hw, -hh, rf, gf, bf, af, 2.0f, hw, hh, rad);
+    push_vertex(x1, y0, hw, -hh, rf, gf, bf, af, 2.0f, hw, hh, rad);
+    push_vertex(x1, y1, hw, hh, rf, gf, bf, af, 2.0f, hw, hh, rad);
+    push_vertex(x0, y0, -hw, -hh, rf, gf, bf, af, 2.0f, hw, hh, rad);
+    push_vertex(x1, y1, hw, hh, rf, gf, bf, af, 2.0f, hw, hh, rad);
+    push_vertex(x0, y1, -hw, hh, rf, gf, bf, af, 2.0f, hw, hh, rad);
+}
+
+// Restrict drawing to a rectangle (top-left origin). Clips nest.
+void q_push_clip(int64_t x, int64_t y, int64_t w, int64_t h) {
+    flush();
+    if (g_clip_n < MAX_CLIPS) {
+        g_clip[g_clip_n][0] = (int)x;
+        g_clip[g_clip_n][1] = (int)y;
+        g_clip[g_clip_n][2] = (int)w;
+        g_clip[g_clip_n][3] = (int)h;
+        g_clip_n++;
+    }
+    glEnable(GL_SCISSOR_TEST);
+    glScissor((int)x, g_fb_h - (int)(y + h), (int)w, (int)h);
+}
+
+void q_pop_clip(void) {
+    flush();
+    if (g_clip_n > 0) {
+        g_clip_n--;
+    }
+    if (g_clip_n == 0) {
+        glDisable(GL_SCISSOR_TEST);
+    } else {
+        int *c = g_clip[g_clip_n - 1];
+        glScissor(c[0], g_fb_h - (c[1] + c[3]), c[2], c[3]);
+    }
 }
 
 void q_frame_end(void) {

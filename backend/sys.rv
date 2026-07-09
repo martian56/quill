@@ -16,6 +16,9 @@ extern "C" {
     fun q_clear_rgb(r: Int, g: Int, b: Int)
     fun q_frame_begin(width: Int, height: Int)
     fun q_fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int)
+    fun q_fill_round_rect(x: Int, y: Int, w: Int, h: Int, radius: Int, r: Int, g: Int, b: Int, a: Int)
+    fun q_push_clip(x: Int, y: Int, w: Int, h: Int)
+    fun q_pop_clip()
     fun q_frame_end()
     fun q_font_load(path: CStr) -> Int
     fun q_text(font: Int, x: Int, y: Int, px: Int, str: CStr, r: Int, g: Int, b: Int, a: Int)
@@ -78,6 +81,21 @@ fun frame_begin(width: Int, height: Int) {
 
 fun fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int) {
     q_fill_rect(x, y, w, h, r, g, b, a)
+    return
+}
+
+fun fill_round_rect(x: Int, y: Int, w: Int, h: Int, radius: Int, r: Int, g: Int, b: Int, a: Int) {
+    q_fill_round_rect(x, y, w, h, radius, r, g, b, a)
+    return
+}
+
+fun push_clip(x: Int, y: Int, w: Int, h: Int) {
+    q_push_clip(x, y, w, h)
+    return
+}
+
+fun pop_clip() {
+    q_pop_clip()
     return
 }
 

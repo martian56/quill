@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, frame_end, font_load, draw_text, measure_width }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -147,6 +147,23 @@ impl Frame {
     // Fill an axis-aligned rectangle, in pixels from the top-left.
     fun rect(self, x: Int, y: Int, w: Int, h: Int, c: Color) {
         fill_rect(x, y, w, h, c.r, c.g, c.b, 255)
+        return
+    }
+
+    // Fill a rectangle with rounded corners of the given radius.
+    fun rounded_rect(self, x: Int, y: Int, w: Int, h: Int, radius: Int, c: Color) {
+        fill_round_rect(x, y, w, h, radius, c.r, c.g, c.b, 255)
+        return
+    }
+
+    // Restrict drawing to a rectangle until unclip; clips nest.
+    fun clip(self, x: Int, y: Int, w: Int, h: Int) {
+        push_clip(x, y, w, h)
+        return
+    }
+
+    fun unclip(self) {
+        pop_clip()
         return
     }
 

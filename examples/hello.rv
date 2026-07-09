@@ -14,17 +14,33 @@ fun hello_update(m: Model, e: Event) -> Step<Model> {
     return next(Model { ticks: m.ticks + 1, font: m.font })
 }
 
+fun muted() -> Color {
+    return Color.rgb(150, 160, 175)
+}
+
 fun hello_view(m: Model, f: Frame) {
-    f.clear(Color.rgb(24, 24, 32))
-    f.text(Text.new(m.font, "quill").at(80, 28).size(40))
+    f.clear(Color.rgb(20, 22, 28))
+    f.text(Text.new(m.font, "quill").at(40, 26).size(38))
+    f.text(Text.new(m.font, "rounded rects, text, and clipping").at(42, 76).size(17).color(muted()))
+
+    f.rounded_rect(40, 118, 330, 300, 16, Color.rgb(32, 36, 46))
+    f.text(Text.new(m.font, "Buttons").at(64, 138).size(22))
+    f.rounded_rect(64, 186, 160, 46, 10, Color.rgb(90, 140, 240))
+    f.text(Text.new(m.font, "Primary").at(102, 199).size(18))
+    f.rounded_rect(64, 250, 160, 46, 10, Color.rgb(52, 58, 72))
+    f.text(Text.new(m.font, "Secondary").at(92, 263).size(18).color(Color.rgb(210, 215, 225)))
+    f.rounded_rect(64, 336, 258, 18, 9, Color.rgb(90, 140, 240))
+
+    f.rounded_rect(410, 118, 310, 300, 16, Color.rgb(32, 36, 46))
+    f.text(Text.new(m.font, "Clipped").at(434, 138).size(22))
+    f.clip(434, 176, 262, 220)
+    f.rect(400, 150, 420, 320, Color.rgb(240, 120, 90))
     f.text(
-        Text.new(m.font, "a GUI framework for Raven").at(84, 84).size(18).color(
-            Color.rgb(150, 160, 180),
-        ),
+        Text.new(m.font, "this fill overflows its panel, the clip keeps it inside").at(300, 250).size(
+            16,
+        ).color(Color.rgb(24, 20, 18)),
     )
-    f.rect(80, 130, 300, 170, Color.rgb(90, 140, 240))
-    f.rect(210, 210, 300, 170, Color.rgb(240, 120, 90))
-    f.rect(150, 300, 220, 110, Color.rgb(120, 210, 140))
+    f.unclip()
 }
 
 fun hello_main() -> Bool {
