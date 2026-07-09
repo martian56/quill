@@ -1,9 +1,25 @@
-# quill
+<p align="center">
+  <img src="assets/logo.png" alt="quill" width="148" />
+</p>
 
-A GUI toolkit for the [Raven](https://github.com/martian56/raven) language: native
-windows, a batched OpenGL renderer, and a declarative, themeable widget set. The
-backend (GLFW, OpenGL, fontstash, stb_image) is vendored and statically linked, so
-a quill app is a single executable with nothing to install and no DLL to ship.
+<h1 align="center">quill</h1>
+
+<p align="center">
+  A GUI toolkit for the <a href="https://github.com/martian56/raven">Raven</a> language:
+  <br />
+  native windows, a batched OpenGL renderer, and a declarative widget set.
+</p>
+
+<p align="center">
+  <a href="https://github.com/martian56/quill/actions/workflows/ci.yml"><img src="https://github.com/martian56/quill/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/martian56/quill/releases"><img src="https://img.shields.io/github/v/release/martian56/quill?style=flat-square&label=release&color=8b5cf6" alt="release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square" alt="license" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows-4c9aff?style=flat-square" alt="platform" />
+  <img src="https://img.shields.io/badge/built%20with-Raven-06b6d4?style=flat-square" alt="built with Raven" />
+</p>
+
+The backend (GLFW, OpenGL, fontstash, stb_image) is vendored and statically linked,
+so a quill app is a single executable with nothing to install and no DLL to ship.
 
 quill follows the same shape as [plumage](https://github.com/martian56/plumage),
 its terminal counterpart. You give it a model and three functions, and it owns the

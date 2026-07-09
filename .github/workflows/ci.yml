@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    # quill's backend is currently Windows only (GLFW win32), so CI runs on Windows.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Raven
+        uses: martian56/setup-raven@v1
+
+      - name: Build
+        run: rvpm build
+
+      - name: Test
+        run: rvpm test
+
+      - name: Format check
+        run: rvpm fmt --check
