@@ -5,7 +5,7 @@ windows, a batched OpenGL renderer, and a declarative, themeable widget set. The
 backend (GLFW, OpenGL, fontstash, stb_image) is vendored and statically linked, so
 a quill app is a single executable with nothing to install and no DLL to ship.
 
-![A quill app](assets/screenshot.png)
+![A task tracker built with quill](assets/orbit.png)
 
 quill follows the same shape as [plumage](https://github.com/martian56/plumage),
 its terminal counterpart. You give it a model and three functions, and it owns the
@@ -172,6 +172,10 @@ cd quill
 rvpm run            # the showcase: a todo app touching every widget
 rvpm run -- hello   # a smaller counter and text field
 ```
+
+The bundled showcase exercises every widget in one screen:
+
+![The quill showcase](assets/screenshot.png)
 
 ## Build, test, format
 
