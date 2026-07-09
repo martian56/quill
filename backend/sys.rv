@@ -17,6 +17,9 @@ extern "C" {
     fun q_frame_begin(width: Int, height: Int)
     fun q_fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int)
     fun q_frame_end()
+    fun q_font_load(path: CStr) -> Int
+    fun q_text(font: Int, x: Int, y: Int, px: Int, str: CStr, r: Int, g: Int, b: Int, a: Int)
+    fun q_measure_width(font: Int, px: Int, str: CStr) -> Int
 }
 
 fun backend_init() -> Bool {
@@ -81,4 +84,26 @@ fun fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int) {
 fun frame_end() {
     q_frame_end()
     return
+}
+
+// Load a TTF from disk. Returns the font id, or -1 on failure.
+fun font_load(path: String) -> Int {
+    let c = to_cstr(path)
+    let id = q_font_load(c)
+    free_cstr(c)
+    return id
+}
+
+fun draw_text(font: Int, x: Int, y: Int, px: Int, s: String, r: Int, g: Int, b: Int, a: Int) {
+    let c = to_cstr(s)
+    q_text(font, x, y, px, c, r, g, b, a)
+    free_cstr(c)
+    return
+}
+
+fun measure_width(font: Int, px: Int, s: String) -> Int {
+    let c = to_cstr(s)
+    let w = q_measure_width(font, px, c)
+    free_cstr(c)
+    return w
 }

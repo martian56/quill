@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, frame_end }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, frame_end, font_load, draw_text, measure_width }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -36,6 +36,55 @@ struct Color {
 impl Color {
     fun rgb(r: Int, g: Int, b: Int) -> Color {
         return Color { r, g, b }
+    }
+}
+
+// A loaded font. Load once (in init) and reuse; drawing with an unloaded font
+// is a no-op.
+struct Font {
+    id: Int,
+}
+
+impl Font {
+    fun load(path: String) -> Font {
+        return Font { id: font_load(path) }
+    }
+
+    fun ok(self) -> Bool {
+        return self.id >= 0
+    }
+
+    // Pixel width of s at the given size, for laying text out.
+    fun width(self, size: Int, s: String) -> Int {
+        return measure_width(self.id, size, s)
+    }
+}
+
+// A run of text to draw. Build it fluently: Text.new(font, "hi").at(x, y).size(n).
+struct Text {
+    font: Font,
+    x: Int,
+    y: Int,
+    px: Int,
+    s: String,
+    color: Color,
+}
+
+impl Text {
+    fun new(font: Font, s: String) -> Text {
+        return Text { font, x: 0, y: 0, px: 16, s, color: Color.rgb(235, 235, 240) }
+    }
+
+    fun at(self, x: Int, y: Int) -> Text {
+        return Text { font: self.font, x, y, px: self.px, s: self.s, color: self.color }
+    }
+
+    fun size(self, px: Int) -> Text {
+        return Text { font: self.font, x: self.x, y: self.y, px, s: self.s, color: self.color }
+    }
+
+    fun color(self, c: Color) -> Text {
+        return Text { font: self.font, x: self.x, y: self.y, px: self.px, s: self.s, color: c }
     }
 }
 
@@ -98,6 +147,12 @@ impl Frame {
     // Fill an axis-aligned rectangle, in pixels from the top-left.
     fun rect(self, x: Int, y: Int, w: Int, h: Int, c: Color) {
         fill_rect(x, y, w, h, c.r, c.g, c.b, 255)
+        return
+    }
+
+    // Draw a run of text; its top-left sits at the Text's position.
+    fun text(self, t: Text) {
+        draw_text(t.font.id, t.x, t.y, t.px, t.s, t.color.r, t.color.g, t.color.b, 255)
         return
     }
 }

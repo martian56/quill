@@ -1,6 +1,8 @@
-/* quill renderer: a batched 2D quad pipeline on OpenGL 3.3 core. Rectangles are
- * accumulated into one vertex buffer per frame and drawn in a single pass. GL
- * functions past 1.1 are loaded through GLFW's cross-platform proc loader. */
+/* quill renderer: a batched 2D pipeline on OpenGL 3.3 core. Solid rectangles
+ * and glyph quads share one vertex buffer and one draw call per frame. Each
+ * vertex carries a mode flag: solid fills ignore the atlas texture, glyphs
+ * sample its red channel as coverage. GL functions past 1.1 are loaded through
+ * GLFW's cross-platform proc loader. */
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -17,6 +19,9 @@ typedef ptrdiff_t GLintptr;
 #define GL_VERTEX_SHADER 0x8B31
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
+#define GL_R8 0x8229
+#define GL_RED 0x1903
+#define GL_CLAMP_TO_EDGE 0x812F
 
 #define GLFN(ret, name, args) \
     typedef ret(APIENTRY * PFN_##name) args; \
@@ -45,6 +50,7 @@ GLFN(void, glUseProgram, (GLuint))
 GLFN(void, glDeleteShader, (GLuint))
 GLFN(GLint, glGetUniformLocation, (GLuint, const GLchar *))
 GLFN(void, glUniformMatrix4fv, (GLint, GLsizei, GLboolean, const GLfloat *))
+GLFN(void, glUniform1i, (GLint, GLint))
 
 static int load_gl(void) {
 #define LOAD(name) \
@@ -72,6 +78,7 @@ static int load_gl(void) {
     LOAD(glDeleteShader)
     LOAD(glGetUniformLocation)
     LOAD(glUniformMatrix4fv)
+    LOAD(glUniform1i)
 #undef LOAD
     return 0;
 }
@@ -79,29 +86,43 @@ static int load_gl(void) {
 static const char *VERT_SRC =
     "#version 330 core\n"
     "layout(location=0) in vec2 a_pos;\n"
-    "layout(location=1) in vec4 a_color;\n"
+    "layout(location=1) in vec2 a_uv;\n"
+    "layout(location=2) in vec4 a_color;\n"
+    "layout(location=3) in float a_mode;\n"
     "uniform mat4 u_proj;\n"
+    "out vec2 v_uv;\n"
     "out vec4 v_color;\n"
+    "out float v_mode;\n"
     "void main() {\n"
+    "    v_uv = a_uv;\n"
     "    v_color = a_color;\n"
+    "    v_mode = a_mode;\n"
     "    gl_Position = u_proj * vec4(a_pos, 0.0, 1.0);\n"
     "}\n";
 
 static const char *FRAG_SRC =
     "#version 330 core\n"
+    "in vec2 v_uv;\n"
     "in vec4 v_color;\n"
+    "in float v_mode;\n"
+    "uniform sampler2D u_tex;\n"
     "out vec4 frag_color;\n"
     "void main() {\n"
-    "    frag_color = v_color;\n"
+    "    float cov = 1.0;\n"
+    "    if (v_mode > 0.5) cov = texture(u_tex, v_uv).r;\n"
+    "    frag_color = vec4(v_color.rgb, v_color.a * cov);\n"
     "}\n";
 
-#define FLOATS_PER_VERTEX 6
-#define MAX_VERTICES 16384
+#define FLOATS_PER_VERTEX 9
+#define MAX_VERTICES 65536
 
 static GLuint g_program;
 static GLuint g_vao;
 static GLuint g_vbo;
 static GLint g_proj_loc;
+static GLuint g_atlas_tex;
+static int g_atlas_w;
+static int g_atlas_h;
 static float g_verts[MAX_VERTICES * FLOATS_PER_VERTEX];
 static int g_vert_count;
 
@@ -146,6 +167,8 @@ int q_render_init(void) {
     p_glDeleteShader(vs);
     p_glDeleteShader(fs);
     g_proj_loc = p_glGetUniformLocation(g_program, "u_proj");
+    p_glUseProgram(g_program);
+    p_glUniform1i(p_glGetUniformLocation(g_program, "u_tex"), 0);
 
     p_glGenVertexArrays(1, &g_vao);
     p_glBindVertexArray(g_vao);
@@ -156,9 +179,38 @@ int q_render_init(void) {
     p_glEnableVertexAttribArray(0);
     p_glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void *)0);
     p_glEnableVertexAttribArray(1);
-    p_glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void *)(2 * sizeof(float)));
+    p_glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void *)(2 * sizeof(float)));
+    p_glEnableVertexAttribArray(2);
+    p_glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void *)(4 * sizeof(float)));
+    p_glEnableVertexAttribArray(3);
+    p_glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void *)(8 * sizeof(float)));
     p_glBindVertexArray(0);
     return 0;
+}
+
+// Create (or replace) the single-channel glyph atlas texture.
+void q_atlas_init(int width, int height) {
+    if (g_atlas_tex == 0) {
+        glGenTextures(1, &g_atlas_tex);
+    }
+    g_atlas_w = width;
+    g_atlas_h = height;
+    glBindTexture(GL_TEXTURE_2D, g_atlas_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
+void q_atlas_upload(const unsigned char *data) {
+    if (g_atlas_tex == 0) {
+        return;
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glBindTexture(GL_TEXTURE_2D, g_atlas_tex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_atlas_w, g_atlas_h, GL_RED,
+                    GL_UNSIGNED_BYTE, data);
 }
 
 static void flush(void) {
@@ -166,6 +218,9 @@ static void flush(void) {
         return;
     }
     p_glUseProgram(g_program);
+    if (g_atlas_tex != 0) {
+        glBindTexture(GL_TEXTURE_2D, g_atlas_tex);
+    }
     p_glBindVertexArray(g_vao);
     p_glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
     p_glBufferSubData(GL_ARRAY_BUFFER, 0,
@@ -191,15 +246,28 @@ void q_frame_begin(int64_t width, int64_t height) {
     g_vert_count = 0;
 }
 
-static void push_vertex(float x, float y, float r, float g, float b, float a) {
-    float *v = &g_verts[g_vert_count * FLOATS_PER_VERTEX];
-    v[0] = x;
-    v[1] = y;
-    v[2] = r;
-    v[3] = g;
-    v[4] = b;
-    v[5] = a;
+static void push_vertex(float x, float y, float u, float v,
+                        float r, float g, float b, float a, float mode) {
+    float *p = &g_verts[g_vert_count * FLOATS_PER_VERTEX];
+    p[0] = x;
+    p[1] = y;
+    p[2] = u;
+    p[3] = v;
+    p[4] = r;
+    p[5] = g;
+    p[6] = b;
+    p[7] = a;
+    p[8] = mode;
     g_vert_count++;
+}
+
+// A single glyph vertex from the text layer; coverage sampled from the atlas.
+void q_push_text_vertex(float x, float y, float u, float v,
+                        float r, float g, float b, float a) {
+    if (g_vert_count + 1 > MAX_VERTICES) {
+        flush();
+    }
+    push_vertex(x, y, u, v, r, g, b, a, 1.0f);
 }
 
 void q_fill_rect(int64_t x, int64_t y, int64_t w, int64_t h,
@@ -215,12 +283,12 @@ void q_fill_rect(int64_t x, int64_t y, int64_t w, int64_t h,
     float gf = (float)g / 255.0f;
     float bf = (float)b / 255.0f;
     float af = (float)a / 255.0f;
-    push_vertex(x0, y0, rf, gf, bf, af);
-    push_vertex(x1, y0, rf, gf, bf, af);
-    push_vertex(x1, y1, rf, gf, bf, af);
-    push_vertex(x0, y0, rf, gf, bf, af);
-    push_vertex(x1, y1, rf, gf, bf, af);
-    push_vertex(x0, y1, rf, gf, bf, af);
+    push_vertex(x0, y0, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
+    push_vertex(x1, y0, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
+    push_vertex(x1, y1, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
+    push_vertex(x0, y0, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
+    push_vertex(x1, y1, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
+    push_vertex(x0, y1, 0.0f, 0.0f, rf, gf, bf, af, 0.0f);
 }
 
 void q_frame_end(void) {

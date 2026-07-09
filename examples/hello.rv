@@ -1,22 +1,30 @@
-import "../lib" { App, Event, Frame, Step, Color, WindowConfig, next, run }
+import "../lib" { App, Event, Frame, Step, Color, WindowConfig, Font, Text, next, run }
 
 struct Model {
     ticks: Int,
+    font: Font,
 }
 
 fun hello_init() -> Model {
-    return Model { ticks: 0 }
+    let font = Font.load("assets/fonts/Go-Regular.ttf")
+    return Model { ticks: 0, font }
 }
 
 fun hello_update(m: Model, e: Event) -> Step<Model> {
-    return next(Model { ticks: m.ticks + 1 })
+    return next(Model { ticks: m.ticks + 1, font: m.font })
 }
 
 fun hello_view(m: Model, f: Frame) {
     f.clear(Color.rgb(24, 24, 32))
-    f.rect(80, 80, 320, 200, Color.rgb(90, 140, 240))
-    f.rect(220, 180, 320, 200, Color.rgb(240, 120, 90))
-    f.rect(160, 300, 240, 120, Color.rgb(120, 210, 140))
+    f.text(Text.new(m.font, "quill").at(80, 28).size(40))
+    f.text(
+        Text.new(m.font, "a GUI framework for Raven").at(84, 84).size(18).color(
+            Color.rgb(150, 160, 180),
+        ),
+    )
+    f.rect(80, 130, 300, 170, Color.rgb(90, 140, 240))
+    f.rect(210, 210, 300, 170, Color.rgb(240, 120, 90))
+    f.rect(150, 300, 220, 110, Color.rgb(120, 210, 140))
 }
 
 fun hello_main() -> Bool {
