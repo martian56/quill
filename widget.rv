@@ -74,6 +74,7 @@ struct Widget {
     mh: Int,
     box: Rect,
     scroll: Int,
+    tip: String,
 }
 
 fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
@@ -96,6 +97,7 @@ fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
         mh: 0,
         box: Rect { x: 0, y: 0, w: 0, h: 0 },
         scroll: 0,
+        tip: "",
     }
 }
 
@@ -272,6 +274,12 @@ impl Widget {
         self.enabled = false
         return self
     }
+
+    // Show this text in a small popup after the cursor rests on the widget.
+    fun tip(self, text: String) -> Widget {
+        self.tip = text
+        return self
+    }
 }
 
 fun _contains(r: Rect, x: Int, y: Int) -> Bool {
@@ -347,6 +355,33 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
             }
         },
         _ -> {},
+    }
+    return None
+}
+
+// The deepest widget carrying a tooltip under (x, y), if any. Scroll viewports
+// clip the search to their box so a scrolled-out widget shows no tip.
+fun _tip_at(w: Widget, x: Int, y: Int) -> Widget? {
+    match w.kind {
+        Scroll(id) -> {
+            if !_contains(w.box, x, y) {
+                return None
+            }
+        },
+        _ -> {},
+    }
+    let i = 0
+    while i < w.kids.len() {
+        match _tip_at(w.kids[i], x, y) {
+            Some(t) -> {
+                return Some(t)
+            },
+            None -> {},
+        }
+        i = i + 1
+    }
+    if w.tip != "" && _contains(w.box, x, y) {
+        return Some(w)
     }
     return None
 }

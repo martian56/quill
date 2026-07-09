@@ -1,6 +1,6 @@
 import std/test { assert_eq, assert_true, assert_false }
 import "./lib" { Theme, Font, Rect }
-import "./widget" { Widget, Align, Justify, column, row, button, slider, _hit, _drop_last, _slider_value_at }
+import "./widget" { Widget, Align, Justify, column, row, button, label, slider, _hit, _drop_last, _slider_value_at, _tip_at }
 import "./layout" { measure, arrange }
 
 // A fixed-size leaf that needs no font, so layout is testable headlessly.
@@ -106,6 +106,33 @@ fun test_row_justify_between() {
     arrange(root, Rect { x: 0, y: 0, w: 200, h: 30 })
     assert_eq(a.box.x, 0)
     assert_eq(b.box.x, 150)
+}
+
+fun test_tip_at_finds_tipped_widget() {
+    let plain = button("a", "A")
+    plain.box = Rect { x: 0, y: 0, w: 60, h: 30 }
+    let tipped = button("b", "B").tip("hello")
+    tipped.box = Rect { x: 100, y: 0, w: 60, h: 30 }
+    let root = row([plain, tipped])
+    root.box = Rect { x: 0, y: 0, w: 200, h: 30 }
+    // Over the tipped button: returns it with its text.
+    match _tip_at(root, 120, 15) {
+        Some(w) -> {
+            assert_eq(w.tip, "hello")
+        },
+        None -> {
+            assert_true(false)
+        },
+    }
+    // Over a widget with no tip: nothing.
+    match _tip_at(root, 30, 15) {
+        Some(w) -> {
+            assert_false(true)
+        },
+        None -> {
+            assert_true(true)
+        },
+    }
 }
 
 fun test_slider_value_at() {

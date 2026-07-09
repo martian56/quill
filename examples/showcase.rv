@@ -157,9 +157,12 @@ fun showcase_update(m: Model, e: UiEvent) -> Model {
 
 fun item_row(m: Model, text: String, i: Int) -> Widget {
     return panel(
-        row([label(text).size(m.item_size).grow(1), button("del-${i}", "Delete").width(110)]).gap(
-            12,
-        ),
+        row(
+            [
+                label(text).size(m.item_size).grow(1),
+                button("del-${i}", "Delete").width(110).tip("Remove this todo"),
+            ],
+        ).gap(12),
     ).bg(m.theme.surface).rounded(12).pad(14)
 }
 
@@ -186,7 +189,7 @@ fun items_view(m: Model) -> Widget {
 
 // The Add button is disabled until there is something to add.
 fun add_button(m: Model) -> Widget {
-    let b = button("add", "Add").width(110)
+    let b = button("add", "Add").width(110).tip("Add the todo, or press Enter")
     if m.draft == "" {
         return b.disabled()
     }
@@ -227,7 +230,7 @@ fun side_settings(m: Model) -> Widget {
     return column(
         [
             checkbox("show_count", m.show_count, "Show item count").size(16),
-            checkbox("theme", m.dark, "Dark theme").size(16),
+            checkbox("theme", m.dark, "Dark theme").size(16).tip("Switch between light and dark"),
             radio("sort_new", m.newest_first, "Newest first").size(16),
             radio("sort_old", !m.newest_first, "Oldest first").size(16),
             label("Priority").size(15).color(m.theme.muted),
@@ -250,7 +253,7 @@ fun sidebar(m: Model) -> Widget {
                 tabs("side", m.side_tab, ["Info", "Settings"], m.theme),
                 divider(),
                 content,
-                button("about", "About").width(120),
+                button("about", "About").width(120).tip("Version and credits"),
             ],
         ).gap(14),
     ).bg(m.theme.surface).rounded(16).pad(22).width(300)

@@ -17,9 +17,9 @@
 //     }
 
 import "./lib" { Theme, Rect, Window, WindowConfig, start, stop }
-import "./widget" { Widget, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at, _find_dropdown, _dd_option }
+import "./widget" { Widget, _hit, _tip_at, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at, _find_dropdown, _dd_option }
 import "./layout" { measure, arrange }
-import "./paint" { Interaction, paint, dd_option_at, paint_menu }
+import "./paint" { Interaction, Tooltip, paint, dd_option_at, paint_menu, paint_tooltip }
 import std/string
 import std/collections { Map, empty_map }
 
@@ -34,6 +34,9 @@ const KEY_HOME: Int = 268
 const KEY_END: Int = 269
 const KEY_C: Int = 67
 const KEY_V: Int = 86
+
+// How long the cursor must rest before a widget's tooltip appears.
+const TOOLTIP_DELAY: Int = 600
 
 fun _is_cont(b: Int) -> Bool {
     return b >= 128 && b < 192
@@ -154,7 +157,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
 
     let offsets = empty_map<String, Int>()
     let model = (app.init)()
-    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None, offsets, 0, None)
+    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None, offsets, 0, None, None)
 
     let was_down = false
     let pressed: String? = None
@@ -163,9 +166,14 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
     let open_dd: String? = None
     let caret = 0
     let last_cursor = -1
+    let last_mx = -1
+    let last_my = -1
+    let hover_deadline = -1
+    let tip_shown = false
+    let wait_ms = _idle_timeout(focused)
     let running = true
     while running {
-        win.wait(_idle_timeout(focused))
+        win.wait(wait_ms)
         if win.should_close() {
             running = false
         }
@@ -278,7 +286,46 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         caret = outcome.caret
         model = update_fn(model, UiEvent.Tick)
 
-        last = _draw(win, view_fn, theme_of, model, mx, my, down, focused, offsets, caret, open_dd)
+        // Tooltip hover: moving the cursor resets the timer and hides any tip; a
+        // still cursor resting over a tip target reveals it after the delay. Held
+        // buttons and drags suppress tips.
+        let now = win.time_ms()
+        if mx != last_mx || my != last_my {
+            hover_deadline = now + TOOLTIP_DELAY
+            tip_shown = false
+        }
+        last_mx = mx
+        last_my = my
+        let tip: Tooltip? = None
+        let over_tip = false
+        if !down {
+            match _tip_at(last, mx, my) {
+                Some(tw) -> {
+                    over_tip = true
+                    if now >= hover_deadline {
+                        tip_shown = true
+                    }
+                    if tip_shown {
+                        tip = Some(Tooltip { text: tw.tip, box: tw.box })
+                    }
+                },
+                None -> {},
+            }
+        }
+
+        // Wake to reveal a pending tooltip; otherwise idle (or blink the caret).
+        wait_ms = _idle_timeout(focused)
+        if over_tip && !tip_shown {
+            let remain = hover_deadline - now
+            if remain < 1 {
+                remain = 1
+            }
+            if wait_ms == 0 || remain < wait_ms {
+                wait_ms = remain
+            }
+        }
+
+        last = _draw(win, view_fn, theme_of, model, mx, my, down, focused, offsets, caret, open_dd, tip)
     }
 
     win.close()
@@ -332,6 +379,7 @@ fun _draw<M>(
     offsets: Map<String, Int>,
     caret: Int,
     open_dd: String?,
+    tip: Tooltip?,
 ) -> Widget {
     let theme = theme_of(model)
     let tree = view_fn(model)
@@ -354,6 +402,12 @@ fun _draw<M>(
                 },
                 None -> {},
             }
+        },
+        None -> {},
+    }
+    match tip {
+        Some(t) -> {
+            paint_tooltip(f, theme, t, win.width(), win.height())
         },
         None -> {},
     }

@@ -16,6 +16,10 @@ const DD_PAD_X: Int = 12
 const DD_RADIUS: Int = 8
 const DD_ARROW: Int = 22
 const DD_ITEM_PAD: Int = 12
+const TIP_SIZE: Int = 14
+const TIP_PAD_X: Int = 10
+const TIP_PAD_Y: Int = 6
+const TIP_GAP: Int = 8
 
 // The interaction state paint reads for hover, press, and focus feedback. Build
 // _inert() when there is no interaction (a plain render).
@@ -349,6 +353,44 @@ fun paint_menu(w: Widget, f: Frame, theme: Theme, mx: Int, my: Int) {
         },
         _ -> {},
     }
+    return
+}
+
+// A resolved tooltip: the text to show and the box of the widget it belongs to.
+struct Tooltip {
+    text: String,
+    box: Rect,
+}
+
+// Draw a tooltip bubble anchored under its widget, flipping above when it would
+// fall off the bottom and clamping inside the window. Drawn last, so it floats
+// over everything including an open menu.
+fun paint_tooltip(f: Frame, theme: Theme, tip: Tooltip, win_w: Int, win_h: Int) {
+    let lh = theme.font.line_height(TIP_SIZE)
+    let tw = theme.font.width(TIP_SIZE, tip.text)
+    let bw = tw + 2 * TIP_PAD_X
+    let bh = lh + 2 * TIP_PAD_Y
+    let bx = tip.box.x
+    let by = tip.box.y + tip.box.h + TIP_GAP
+    if by + bh > win_h {
+        by = tip.box.y - bh - TIP_GAP
+    }
+    if bx + bw > win_w {
+        bx = win_w - bw - 4
+    }
+    if bx < 4 {
+        bx = 4
+    }
+    if by < 4 {
+        by = 4
+    }
+    f.rounded_rect(bx, by, bw, bh, 6, theme.muted)
+    f.rounded_rect(bx + 1, by + 1, bw - 2, bh - 2, 5, theme.field)
+    f.text(
+        Text.new(theme.font, tip.text).at(bx + TIP_PAD_X, by + TIP_PAD_Y).size(TIP_SIZE).color(
+            theme.text,
+        ),
+    )
     return
 }
 
