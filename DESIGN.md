@@ -54,23 +54,29 @@ user-facing extras (widgets) are their own subpath modules, imported directly as
 
 ```
 quill/
-  lib.rv              public API: App, run, Event, Step, next, quit,
-                      Frame, Color, WindowConfig
-  lib_test.rv         public-API tests
+  lib.rv              core API: window/frame primitives, Color, Rect, Font,
+                      Text, Theme, Event, Step, App, run, Window
+  widget.rv           widgets + flex layout + paint + hit-test + render
+  app.rv              widget runtime: UiApp, UiEvent, run_ui
+  lib_test.rv  widget_test.rv
   backend/
     sys.rv            the only extern owner; wraps the C shim
     sys_test.rv
   c/
-    quill.c           backend shim (q_* functions, int64/cstr ABI)
+    quill.c           window, input, and GL-clear shim (q_* int64/cstr ABI)
+    render.c          batched OpenGL 3.3 renderer
+    text.c            fontstash glyph atlas and layout
     glfw_unity.c      GLFW common + win32 + wgl, one translation unit
     glfw_null.c       GLFW null platform, separate to avoid static clashes
     glfw/             vendored GLFW 3.4
+  assets/fonts/       bundled Go font (BSD-3)
   src/main.rv         demo launcher (rvpm run -- hello)
   examples/hello.rv
 ```
 
-Each later layer is its own module (M2 `backend/render.rv`, `backend/text.rv`;
-M3 `layout.rv` and `widgets/`), so files stay small and focused.
+The dependency direction is one way (`app.rv` -> `widget.rv` -> `lib.rv` ->
+`backend/sys.rv`); Raven forbids import cycles, so shared types live in the lower
+module. Users import widgets from `quill/widget` and the runtime from `quill/app`.
 
 ## Layers
 
@@ -83,8 +89,8 @@ small C interface so it can be swapped.
 | L1 bindings | `backend/sys.rv` | `extern "C"` decls + string/handle marshaling |
 | L2 paint | `Frame` in `lib.rv`, `c/render.c`, `c/text.c` | typed drawing: `clear`, `rect`, `rounded_rect`, `clip`/`unclip`, `text` |
 | L3 layout | `widget.rv` | flex measure/arrange: `row`/`column`/`panel`, padding, gap, grow, fixed vs stretch |
-| L4 widgets | `widget.rv` (later `widgets/`) | `label`, `button`, `panel`, then `text_input`, `scroll`, checkbox/slider; imported from `quill/widget` |
-| L5 app | `lib.rv` | the loop: `App<M>{ init, update, view }`; `run` owns window + loop + draw |
+| L4 widgets | `widget.rv` | `label`, `button`, `panel`, `input`, `row`/`column`, then `scroll`/checkbox/slider; build, layout, paint, hit-test; imported from `quill/widget` |
+| L5 app | `lib.rv`, `app.rv` | `lib.rv` = immediate `App<M>` + `run`; `app.rv` = the widget runtime `UiApp<M>` + `run_ui`, imported from `quill/app` |
 | L6 theme | `theme.rv` | design tokens (palette, spacing/radius scale, type), light + dark |
 
 Pure layers (layout, theme, event mapping) get `*_test.rv`.
@@ -183,10 +189,11 @@ styling work.
    flex measure/arrange pass and `label`, `button`, `panel`, `row`, `column`
    plus chained modifiers; `render` paints a tree onto a Frame. The counter
    example renders and layout is unit-tested.
-4. **Events + input.** Mouse DONE: `run_ui` polls the cursor and button, hit-tests
-   the laid-out tree, and dispatches `Click(id)`/`Tick` into a `UiApp` update, with
-   hover/press feedback; the counter is interactive. Remaining: keyboard focus and
-   `text_input` with a caret.
+4. **Events + input.** DONE. `run_ui` polls the mouse, hit-tests the laid-out tree,
+   and dispatches `Click(id)`, `Input(id, value)`, and `Tick` into a `UiApp`
+   update. Clicking a field focuses it; GLFW char/key callbacks feed queues the
+   loop drains into the focused input; the caret and hover/press feedback render.
+   The counter and a text field are interactive.
 5. **Theme + polish.** Tokens, light/dark, `scroll`, and a couple of showcase
    examples. Cut `v0.1.0`. (DPI is already handled: GLFW makes the process
    per-monitor aware, so the framebuffer is native resolution and the cursor is
