@@ -159,9 +159,10 @@ cross-platform manual-poll windowing.
 
 ## DPI / hi-dpi
 
-`view` and layout work in logical pixels; the shim reports the framebuffer size
-against the window size, and the renderer multiplies to physical pixels, so text
-and shapes stay crisp on hi-dpi displays.
+GLFW makes the process per-monitor DPI aware, so the framebuffer is reported in
+real pixels and everything is drawn at native resolution. Layout and drawing work
+in those framebuffer pixels, and the cursor is scaled from window coordinates to
+framebuffer pixels to match, so shapes and text stay crisp on hi-dpi displays.
 
 ## Theme
 
@@ -186,11 +187,10 @@ styling work.
    the laid-out tree, and dispatches `Click(id)`/`Tick` into a `UiApp` update, with
    hover/press feedback; the counter is interactive. Remaining: keyboard focus and
    `text_input` with a caret.
-5. **Theme + polish.** Tokens, light/dark, `scroll`, DPI awareness (today the
-   window is not DPI-aware, so at 125% scaling the framebuffer is 960x600 inside a
-   768x480 client; the cursor is scaled to match, but native-resolution rendering
-   wants a per-monitor-aware process), and a couple of showcase examples. Cut
-   `v0.1.0`.
+5. **Theme + polish.** Tokens, light/dark, `scroll`, and a couple of showcase
+   examples. Cut `v0.1.0`. (DPI is already handled: GLFW makes the process
+   per-monitor aware, so the framebuffer is native resolution and the cursor is
+   scaled to match it.)
 
 ## Testing
 
