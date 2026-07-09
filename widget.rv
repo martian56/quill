@@ -47,6 +47,7 @@ enum WidgetKind {
     Checkbox(String, Bool, String),
     Radio(String, Bool, String),
     Slider(String, Int, Int, Int),
+    Dropdown(String, String, List<String>),
     Image(Int, Int, Int),
     Divider,
     Modal(String),
@@ -159,6 +160,12 @@ fun radio(id: String, selected: Bool, text: String) -> Widget {
 // handle sends UiEvent.Slide(id, new_value).
 fun slider(id: String, value: Int, lo: Int, hi: Int) -> Widget {
     return _leaf(WidgetKind.Slider(id, value, lo, hi))
+}
+
+// A dropdown showing selected, opening a menu of options below it. Clicking the
+// trigger opens it; picking an option sends UiEvent.Select(id, option).
+fun dropdown(id: String, selected: String, options: List<String>) -> Widget {
+    return _leaf(WidgetKind.Dropdown(id, selected, options))
 }
 
 // Draw a loaded image (Image.load(...).id) at w by h pixels.
@@ -305,9 +312,52 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
                 return Some(Hit { id, input: false, drag: true })
             }
         },
+        Dropdown(id, selected, options) -> {
+            if _contains(w.box, x, y) {
+                return Some(Hit { id, input: false, drag: false })
+            }
+        },
         _ -> {},
     }
     return None
+}
+
+// The dropdown widget with this id, if present (carries its box and options).
+fun _find_dropdown(w: Widget, id: String) -> Widget? {
+    match w.kind {
+        Dropdown(did, selected, options) -> {
+            if did == id {
+                return Some(w)
+            }
+        },
+        _ -> {},
+    }
+    let i = 0
+    while i < w.kids.len() {
+        match _find_dropdown(w.kids[i], id) {
+            Some(d) -> {
+                return Some(d)
+            },
+            None -> {},
+        }
+        i = i + 1
+    }
+    return None
+}
+
+// The nth option of a dropdown widget.
+fun _dd_option(w: Widget, i: Int) -> String {
+    return match w.kind {
+        Dropdown(id, selected, options) -> options[i],
+        _ -> "",
+    }
+}
+
+fun _dd_count(w: Widget) -> Int {
+    return match w.kind {
+        Dropdown(id, selected, options) -> options.len(),
+        _ -> 0,
+    }
 }
 
 fun _hit_modal(w: Widget, id: String, x: Int, y: Int) -> Hit? {

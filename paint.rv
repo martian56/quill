@@ -12,6 +12,10 @@ const INPUT_RADIUS: Int = 8
 const CHECK_GAP: Int = 10
 const SLIDER_TRACK: Int = 6
 const SLIDER_R: Int = 9
+const DD_PAD_X: Int = 12
+const DD_RADIUS: Int = 8
+const DD_ARROW: Int = 22
+const DD_ITEM_PAD: Int = 12
 
 // The interaction state paint reads for hover, press, and focus feedback. Build
 // _inert() when there is no interaction (a plain render).
@@ -111,6 +115,9 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         },
         Slider(id, value, lo, hi) -> {
             _paint_slider(w, f, theme, value, lo, hi, _contains(w.box, it.x, it.y))
+        },
+        Dropdown(id, selected, options) -> {
+            _paint_dropdown(w, f, theme, selected, _contains(w.box, it.x, it.y))
         },
         Image(handle, iw, ih) -> {
             f.image(handle, w.box.x, w.box.y, w.box.w, w.box.h)
@@ -252,6 +259,95 @@ fun _paint_input(
         }
         let caret = tx + theme.font.width(w.tsize, value.substring(0, cp)) + 1
         f.rect(caret, ty, 2, lh, theme.accent)
+    }
+    return
+}
+
+fun _paint_dropdown(w: Widget, f: Frame, theme: Theme, selected: String, hovered: Bool) {
+    let bg = theme.field
+    if hovered {
+        bg = bg.lighten(10)
+    }
+    f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, DD_RADIUS, bg)
+    let lh = theme.font.line_height(w.tsize)
+    let ty = w.box.y + (w.box.h - lh) / 2
+    f.text(
+        Text.new(theme.font, selected).at(w.box.x + DD_PAD_X, ty).size(w.tsize).color(theme.text),
+    )
+    _paint_chevron(w, f, theme)
+    return
+}
+
+// A small downward triangle on the right of the trigger, drawn from tapering
+// bars so it does not depend on a glyph.
+fun _paint_chevron(w: Widget, f: Frame, theme: Theme) {
+    let cx = w.box.x + w.box.w - DD_ARROW / 2 - 3
+    let cy = w.box.y + w.box.h / 2 - 3
+    f.rect(cx - 4, cy, 9, 2, theme.muted)
+    f.rect(cx - 2, cy + 2, 5, 2, theme.muted)
+    f.rect(cx, cy + 4, 1, 2, theme.muted)
+    return
+}
+
+fun _dd_item_h(theme: Theme, tsize: Int) -> Int {
+    return theme.font.line_height(tsize) + DD_ITEM_PAD
+}
+
+// Which option index is under (mx, my) in the open dropdown's menu, if any.
+fun dd_option_at(w: Widget, theme: Theme, mx: Int, my: Int) -> Int? {
+    return match w.kind {
+        Dropdown(id, selected, options) -> _option_index(w, theme, options.len(), mx, my),
+        _ -> None,
+    }
+}
+
+fun _option_index(w: Widget, theme: Theme, n: Int, mx: Int, my: Int) -> Int? {
+    let ih = _dd_item_h(theme, w.tsize)
+    let x0 = w.box.x
+    let y0 = w.box.y + w.box.h + 4
+    if mx < x0 {
+        return None
+    }
+    if mx >= x0 + w.box.w {
+        return None
+    }
+    if my < y0 {
+        return None
+    }
+    let i = (my - y0) / ih
+    if i < 0 {
+        return None
+    }
+    if i >= n {
+        return None
+    }
+    return Some(i)
+}
+
+// Draw an open dropdown's menu below its trigger, highlighting the hovered row.
+fun paint_menu(w: Widget, f: Frame, theme: Theme, mx: Int, my: Int) {
+    match w.kind {
+        Dropdown(id, selected, options) -> {
+            let ih = _dd_item_h(theme, w.tsize)
+            let x0 = w.box.x
+            let y0 = w.box.y + w.box.h + 4
+            let mw = w.box.w
+            f.rounded_rect(x0, y0, mw, options.len() * ih, DD_RADIUS, theme.surface)
+            let i = 0
+            while i < options.len() {
+                let ry = y0 + i * ih
+                let hov = mx >= x0 && mx < x0 + mw && my >= ry && my < ry + ih
+                let col = theme.text
+                if hov {
+                    f.rect(x0, ry, mw, ih, theme.accent)
+                    col = theme.on_accent
+                }
+                let ty = ry + (ih - theme.font.line_height(w.tsize)) / 2
+                f.text(Text.new(theme.font, options[i]).at(x0 + DD_PAD_X, ty).size(w.tsize).color(col))
+                i = i + 1
+            }
+        },
+        _ -> {},
     }
     return
 }

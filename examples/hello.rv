@@ -39,6 +39,7 @@ fun hello_update(m: Model, e: UiEvent) -> Model {
         Input(id, s) -> _on_input(m, id, s),
         Submit(id) -> m,
         Slide(id, v) -> m,
+        Select(id, opt) -> m,
         Tick -> m,
     }
 }

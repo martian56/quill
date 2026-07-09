@@ -1,5 +1,5 @@
 import "../lib" { Font, Color, Image, Theme, WindowConfig }
-import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, radio, slider, image, divider }
+import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, radio, slider, dropdown, image, divider }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -11,6 +11,7 @@ struct Model {
     dark: Bool,
     item_size: Int,
     newest_first: Bool,
+    priority: String,
     logo: Image,
     font: Font,
     theme: Theme,
@@ -40,6 +41,7 @@ fun showcase_init() -> Model {
         dark: true,
         item_size: 18,
         newest_first: true,
+        priority: "Medium",
         logo,
         font,
         theme: Theme.dark(font),
@@ -129,12 +131,20 @@ fun _on_slide(m: Model, id: String, v: Int) -> Model {
     return m
 }
 
+fun _on_select(m: Model, id: String, opt: String) -> Model {
+    if id == "priority" {
+        m.priority = opt
+    }
+    return m
+}
+
 fun showcase_update(m: Model, e: UiEvent) -> Model {
     return match e {
         Click(id) -> _on_click(m, id),
         Input(id, s) -> _on_input(m, id, s),
         Submit(id) -> _add(m),
         Slide(id, v) -> _on_slide(m, id, v),
+        Select(id, opt) -> _on_select(m, id, opt),
         Tick -> m,
     }
 }
@@ -210,6 +220,8 @@ fun sidebar(m: Model) -> Widget {
                 checkbox("theme", m.dark, "Dark theme").size(16),
                 radio("sort_new", m.newest_first, "Newest first").size(16),
                 radio("sort_old", !m.newest_first, "Oldest first").size(16),
+                label("Priority").size(15).color(m.theme.muted),
+                dropdown("priority", m.priority, ["Low", "Medium", "High"]).size(16),
                 label("Text size: ${m.item_size}").size(15).color(m.theme.muted),
                 slider("item_size", m.item_size, 14, 30),
                 button("about", "About").width(120),

@@ -13,6 +13,9 @@ const INPUT_MIN_W: Int = 160
 const CHECK_GAP: Int = 10
 const SLIDER_W: Int = 200
 const SLIDER_H: Int = 24
+const DD_PAD_X: Int = 12
+const DD_PAD_Y: Int = 8
+const DD_ARROW: Int = 22
 
 // Fill each child's desired size (mw, mh), bottom up.
 fun measure(w: Widget, theme: Theme) {
@@ -46,6 +49,19 @@ fun measure(w: Widget, theme: Theme) {
         Slider(id, value, lo, hi) -> {
             w.mw = SLIDER_W
             w.mh = SLIDER_H
+        },
+        Dropdown(id, selected, options) -> {
+            let maxw = theme.font.width(w.tsize, selected)
+            let i = 0
+            while i < options.len() {
+                let ow = theme.font.width(w.tsize, options[i])
+                if ow > maxw {
+                    maxw = ow
+                }
+                i = i + 1
+            }
+            w.mw = maxw + 2 * DD_PAD_X + DD_ARROW
+            w.mh = theme.font.line_height(w.tsize) + 2 * DD_PAD_Y
         },
         Image(handle, iw, ih) -> {
             w.mw = iw
