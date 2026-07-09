@@ -31,14 +31,23 @@ static void char_cb(GLFWwindow *win, unsigned int codepoint) {
 static void key_cb(GLFWwindow *win, int key, int scancode, int action, int mods) {
     (void)win;
     (void)scancode;
-    (void)mods;
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         int next = (key_tail + 1) % QCAP;
         if (next != key_head) {
-            key_q[key_tail] = key;
+            // Pack modifiers above the key code (keys are < 512).
+            key_q[key_tail] = key | (mods << 9);
             key_tail = next;
         }
     }
+}
+
+const char *q_clipboard_get(int64_t win) {
+    const char *s = glfwGetClipboardString(WIN(win));
+    return s == NULL ? "" : s;
+}
+
+void q_clipboard_set(int64_t win, const char *s) {
+    glfwSetClipboardString(WIN(win), s);
 }
 
 // Accumulated vertical scroll, in wheel notches, taken and reset by Raven.

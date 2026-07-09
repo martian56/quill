@@ -25,6 +25,18 @@ const KEY_ESCAPE: Int = 256
 const KEY_ENTER: Int = 257
 const KEY_TAB: Int = 258
 const KEY_BACKSPACE: Int = 259
+const KEY_C: Int = 67
+const KEY_V: Int = 86
+
+// The key callback packs modifier bits above the key code; Control is bit 1.
+fun _key_code(packed: Int) -> Int {
+    return packed % 512
+}
+
+fun _ctrl(packed: Int) -> Bool {
+    let mods = packed / 512
+    return (mods / 2) % 2 == 1
+}
 
 // What a widget app's update reacts to. Click carries the id of the button
 // pressed and released over the same spot. Input carries a focused field's id
@@ -277,23 +289,32 @@ fun _handle_input<M>(
     let next_focus = focused
     let k = win.poll_key()
     while k >= 0 {
-        if k == KEY_BACKSPACE && has_focus {
+        let key = _key_code(k)
+        let ctrl = _ctrl(k)
+        if key == KEY_BACKSPACE && has_focus {
             cur = _drop_last(cur)
             changed = true
         }
-        if k == KEY_ESCAPE {
+        if key == KEY_ESCAPE {
             next_focus = None
         }
-        if k == KEY_TAB {
+        if key == KEY_TAB {
             next_focus = _next_focus(last, next_focus)
         }
-        if k == KEY_ENTER {
+        if key == KEY_ENTER {
             match focused {
                 Some(fid) -> {
                     model = update_fn(model, UiEvent.Submit(fid))
                 },
                 None -> {},
             }
+        }
+        if ctrl && key == KEY_V && has_focus {
+            cur = cur.concat(win.clipboard())
+            changed = true
+        }
+        if ctrl && key == KEY_C && has_focus {
+            win.set_clipboard(cur)
         }
         k = win.poll_key()
     }

@@ -37,6 +37,8 @@ extern "C" {
     fun q_image_width(idx: Int) -> Int
     fun q_image_height(idx: Int) -> Int
     fun q_draw_image(idx: Int, x: Int, y: Int, w: Int, h: Int)
+    fun q_clipboard_get(win: Int) -> CStr
+    fun q_clipboard_set(win: Int, s: CStr)
 }
 
 fun backend_init() -> Bool {
@@ -204,5 +206,16 @@ fun image_height(idx: Int) -> Int {
 
 fun draw_image(idx: Int, x: Int, y: Int, w: Int, h: Int) {
     q_draw_image(idx, x, y, w, h)
+    return
+}
+
+fun clipboard_get(win: Int) -> String {
+    return from_cstr(q_clipboard_get(win))
+}
+
+fun clipboard_set(win: Int, s: String) {
+    let c = to_cstr(s)
+    q_clipboard_set(win, c)
+    free_cstr(c)
     return
 }
