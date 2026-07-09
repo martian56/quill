@@ -193,6 +193,46 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
     return
 }
 
+fun _abs(n: Int) -> Int {
+    if n < 0 {
+        return -n
+    }
+    return n
+}
+
+// Draw a line from (x0, y0) to (x1, y1) as a run of small squares of side t,
+// centered on the path, so no diagonal primitive is needed.
+fun _stroke(f: Frame, x0: Int, y0: Int, x1: Int, y1: Int, t: Int, c: Color) {
+    let dx = x1 - x0
+    let dy = y1 - y0
+    let steps = _abs(dx)
+    if _abs(dy) > steps {
+        steps = _abs(dy)
+    }
+    if steps == 0 {
+        steps = 1
+    }
+    let h = t / 2
+    let i = 0
+    while i <= steps {
+        f.rect(x0 + dx * i / steps - h, y0 + dy * i / steps - h, t, t, c)
+        i = i + 1
+    }
+    return
+}
+
+// A checkmark drawn from two strokes inside a box of side s at (bx, by), so it
+// renders with any font (the check glyph is absent from most text fonts).
+fun _draw_check(f: Frame, bx: Int, by: Int, s: Int, c: Color) {
+    let t = s / 6
+    if t < 2 {
+        t = 2
+    }
+    _stroke(f, bx + s * 26 / 100, by + s * 48 / 100, bx + s * 42 / 100, by + s * 64 / 100, t, c)
+    _stroke(f, bx + s * 42 / 100, by + s * 64 / 100, bx + s * 74 / 100, by + s * 30 / 100, t, c)
+    return
+}
+
 fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: String, hovered: Bool) {
     let box = theme.font.line_height(w.tsize)
     let bx = w.box.x
@@ -206,7 +246,7 @@ fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: Stri
     }
     f.rounded_rect(bx, by, box, box, 5, fill)
     if checked {
-        f.text(Text.new(theme.font, "✓").at(bx + box / 6, by).size(w.tsize).color(theme.on_accent))
+        _draw_check(f, bx, by, box, theme.on_accent)
     }
     f.text(Text.new(theme.font, text).at(bx + box + CHECK_GAP, by).size(w.tsize).color(theme.text))
     return
