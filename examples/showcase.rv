@@ -1,5 +1,5 @@
-import "../lib" { Font, Color, Theme, WindowConfig }
-import "../widget" { Widget, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, slider }
+import "../lib" { Font, Color, Image, Theme, WindowConfig }
+import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, slider, image }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -10,12 +10,14 @@ struct Model {
     about_open: Bool,
     dark: Bool,
     item_size: Int,
+    logo: Image,
     font: Font,
     theme: Theme,
 }
 
 fun showcase_init() -> Model {
     let font = Font.load("assets/fonts/Go-Regular.ttf")
+    let logo = Image.load("assets/images/logo.png")
     let items: List<String> = []
     items.push("Scroll this list with the mouse wheel")
     items.push("Type a todo and press Add or Enter")
@@ -36,6 +38,7 @@ fun showcase_init() -> Model {
         about_open: false,
         dark: true,
         item_size: 18,
+        logo,
         font,
         theme: Theme.dark(font),
     }
@@ -162,7 +165,7 @@ fun sidebar(m: Model) -> Widget {
     return panel(
         column(
             [
-                label("quill").size(30),
+                row([image(m.logo.id, 48, 48), label("quill").size(30)]).gap(14).align(Align.Center),
                 label("a GUI toolkit for Raven").size(14).color(m.theme.muted),
                 row(
                     [

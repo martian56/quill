@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, take_scroll_y, wait_events, time_ms, poll_char, poll_key, char_utf8, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, take_scroll_y, wait_events, time_ms, poll_char, poll_key, char_utf8, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height, image_load, image_width, image_height, draw_image }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -95,6 +95,24 @@ impl Font {
     // Pixel height of one line at the given size.
     fun line_height(self, size: Int) -> Int {
         return line_height(self.id, size)
+    }
+}
+
+// A loaded image. Load once (in init), then draw it. w and h are its pixels.
+struct Image {
+    id: Int,
+    w: Int,
+    h: Int,
+}
+
+impl Image {
+    fun load(path: String) -> Image {
+        let id = image_load(path)
+        return Image { id, w: image_width(id), h: image_height(id) }
+    }
+
+    fun ok(self) -> Bool {
+        return self.id >= 0
     }
 }
 
@@ -254,6 +272,12 @@ impl Frame {
     // Draw a run of text; its top-left sits at the Text's position.
     fun text(self, t: Text) {
         draw_text(t.font.id, t.x, t.y, t.px, t.s, t.color.r, t.color.g, t.color.b, 255)
+        return
+    }
+
+    // Draw a loaded image (by handle) into a rectangle.
+    fun image(self, handle: Int, x: Int, y: Int, w: Int, h: Int) {
+        draw_image(handle, x, y, w, h)
         return
     }
 }

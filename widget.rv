@@ -57,6 +57,7 @@ enum WidgetKind {
     Input(String, String),
     Checkbox(String, Bool, String),
     Slider(String, Int, Int, Int),
+    Image(Int, Int, Int),
     Modal(String),
 }
 
@@ -161,6 +162,11 @@ fun slider(id: String, value: Int, lo: Int, hi: Int) -> Widget {
     return _leaf(WidgetKind.Slider(id, value, lo, hi))
 }
 
+// Draw a loaded image (Image.load(...).id) at w by h pixels.
+fun image(handle: Int, w: Int, h: Int) -> Widget {
+    return _leaf(WidgetKind.Image(handle, w, h))
+}
+
 // Chained modifiers. Each mutates and returns the node, so they compose:
 // column([...]).pad(24).gap(16).bg(theme.surface).rounded(16).
 impl Widget {
@@ -256,6 +262,10 @@ fun measure(w: Widget, theme: Theme) {
         Slider(id, value, lo, hi) -> {
             w.mw = SLIDER_W
             w.mh = SLIDER_H
+        },
+        Image(handle, iw, ih) -> {
+            w.mw = iw
+            w.mh = ih
         },
         Column -> {
             let total = 0
@@ -606,6 +616,9 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         },
         Slider(id, value, lo, hi) -> {
             _paint_slider(w, f, theme, value, lo, hi, _contains(w.box, it.x, it.y))
+        },
+        Image(handle, iw, ih) -> {
+            f.image(handle, w.box.x, w.box.y, w.box.w, w.box.h)
         },
         Scroll(id) -> {
             _paint_bg(w, f)

@@ -33,6 +33,10 @@ extern "C" {
     fun q_poll_char() -> Int
     fun q_poll_key() -> Int
     fun q_char_utf8(codepoint: Int) -> CStr
+    fun q_image_load(path: CStr) -> Int
+    fun q_image_width(idx: Int) -> Int
+    fun q_image_height(idx: Int) -> Int
+    fun q_draw_image(idx: Int, x: Int, y: Int, w: Int, h: Int)
 }
 
 fun backend_init() -> Bool {
@@ -180,4 +184,25 @@ fun poll_key() -> Int {
 
 fun char_utf8(codepoint: Int) -> String {
     return from_cstr(q_char_utf8(codepoint))
+}
+
+// Load an image file into a GL texture. Returns its index, or -1 on failure.
+fun image_load(path: String) -> Int {
+    let c = to_cstr(path)
+    let idx = q_image_load(c)
+    free_cstr(c)
+    return idx
+}
+
+fun image_width(idx: Int) -> Int {
+    return q_image_width(idx)
+}
+
+fun image_height(idx: Int) -> Int {
+    return q_image_height(idx)
+}
+
+fun draw_image(idx: Int, x: Int, y: Int, w: Int, h: Int) {
+    q_draw_image(idx, x, y, w, h)
+    return
 }

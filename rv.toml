@@ -4,5 +4,5 @@ version = "0.0.0"
 edition = "v2"
 
 [ffi]
-sources = ["c/glfw_unity.c", "c/glfw_null.c", "c/quill.c", "c/render.c", "c/text.c"]
+sources = ["c/glfw_unity.c", "c/glfw_null.c", "c/quill.c", "c/render.c", "c/text.c", "c/image.c"]
 libs = ["gdi32", "user32", "shell32", "opengl32"]

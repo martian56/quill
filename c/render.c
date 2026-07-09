@@ -117,7 +117,9 @@ static const char *FRAG_SRC =
     "    return min(max(q.x, q.y), 0.0) + length(max(q, vec2(0.0))) - r;\n"
     "}\n"
     "void main() {\n"
-    "    if (v_mode > 1.5) {\n"
+    "    if (v_mode > 2.5) {\n"
+    "        frag_color = texture(u_tex, v_uv) * v_color;\n"
+    "    } else if (v_mode > 1.5) {\n"
     "        vec2 b = vec2(v_rrect.x, v_rrect.y);\n"
     "        float d = sd_round_box(v_uv, b, v_rrect.z);\n"
     "        float aa = fwidth(d);\n"
@@ -370,4 +372,33 @@ void q_pop_clip(void) {
 
 void q_frame_end(void) {
     flush();
+}
+
+extern int64_t q_image_tex(int64_t idx);
+
+// Draw an image (by index) into a rectangle. The pending batch is flushed first
+// so z-order is preserved; the image uses its own texture, and the next solid or
+// glyph rebinds the atlas on its flush.
+void q_draw_image(int64_t idx, int64_t x, int64_t y, int64_t w, int64_t h) {
+    flush();
+    int64_t tex = q_image_tex(idx);
+    if (tex == 0) {
+        return;
+    }
+    float x0 = (float)x, y0 = (float)y, x1 = (float)(x + w), y1 = (float)(y + h);
+    g_vert_count = 0;
+    push_vertex(x0, y0, 0, 0, 1, 1, 1, 1, 3.0f, 0, 0, 0);
+    push_vertex(x1, y0, 1, 0, 1, 1, 1, 1, 3.0f, 0, 0, 0);
+    push_vertex(x1, y1, 1, 1, 1, 1, 1, 1, 3.0f, 0, 0, 0);
+    push_vertex(x0, y0, 0, 0, 1, 1, 1, 1, 3.0f, 0, 0, 0);
+    push_vertex(x1, y1, 1, 1, 1, 1, 1, 1, 3.0f, 0, 0, 0);
+    push_vertex(x0, y1, 0, 1, 1, 1, 1, 1, 3.0f, 0, 0, 0);
+    p_glUseProgram(g_program);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)tex);
+    p_glBindVertexArray(g_vao);
+    p_glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+    p_glBufferSubData(GL_ARRAY_BUFFER, 0,
+                      (GLsizeiptr)g_vert_count * FLOATS_PER_VERTEX * sizeof(float), g_verts);
+    glDrawArrays(GL_TRIANGLES, 0, g_vert_count);
+    g_vert_count = 0;
 }
