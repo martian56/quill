@@ -21,6 +21,10 @@ Apps built with the toolkit. More will land here as we build them.
 
 ![A task tracker built with quill](assets/orbit.png)
 
+**A chat app** (icon rail, conversation list, message bubbles):
+
+![A chat app built with quill](assets/chat.png)
+
 ## Install
 
 Add quill to your `rv.toml`:
