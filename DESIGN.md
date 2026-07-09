@@ -81,7 +81,7 @@ small C interface so it can be swapped.
 |-------|---------|------|
 | L0 C backend | `c/*.c` | window, input, GPU renderer, text; the flat `q_*` C interface |
 | L1 bindings | `backend/sys.rv` | `extern "C"` decls + string/handle marshaling |
-| L2 paint | `Frame` in `lib.rv` | typed drawing: `clear`, then `rect`, `rounded_rect`, `text`, `clip` |
+| L2 paint | `Frame` in `lib.rv`, `c/render.c`, `c/text.c` | typed drawing: `clear`, `rect`, `rounded_rect`, `clip`/`unclip`, `text` |
 | L3 layout | `layout.rv` | flexbox-style `Row`/`Column`/`Stack`, padding, gap, align, grow; measure + arrange |
 | L4 widgets | `widgets/` | `label`, `button`, `text_input`, `panel`, `row`/`column`, `scroll`, checkbox/slider |
 | L5 app | `lib.rv` | the loop: `App<M>{ init, update, view }`; `run` owns window + loop + draw |
@@ -174,8 +174,10 @@ styling work.
 
 1. **Hello window.** DONE. GLFW window, GL clearing the frame, the `run` loop,
    Tick/Resize/Close events, a blank window that closes cleanly through Raven.
-2. **Renderer + text.** `fill_rect`, `rounded_rect`, `clip`, and fontstash text
-   with `measure_text`. A frame that draws colored rounded rects and a string.
+2. **Renderer + text.** DONE. A batched OpenGL 3.3 pipeline (`c/render.c`) with
+   solid rects, SDF rounded rects, and scissor clipping, plus fontstash text
+   (`c/text.c`) with a bundled font and width measurement. `Frame` exposes
+   `rect`, `rounded_rect`, `clip`/`unclip`, and `text`.
 3. **Layout + first widgets.** The flex layout engine, plus `label`, `button`,
    `panel`, `row`/`column`. The counter example renders.
 4. **Events + input.** Hit-testing, hover/press/click dispatch, `text_input`
