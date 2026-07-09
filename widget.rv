@@ -52,6 +52,7 @@ enum WidgetKind {
     Button(String, String),
     Input(String, String),
     Checkbox(String, Bool, String),
+    Modal(String),
 }
 
 // One node of the UI tree. Style is set with the chained modifiers below; mw/mh
@@ -120,6 +121,13 @@ fun panel(child: Widget) -> Widget {
 // keys its scroll position across frames.
 fun scroll(id: String, child: Widget) -> Widget {
     return _widget(WidgetKind.Scroll(id), [child])
+}
+
+// Overlay dialog centered over base with a dimmed backdrop. The base is not
+// clickable while the modal is open; clicking the backdrop sends
+// Click(dismiss_id). Wrap your view in this only while the dialog is open.
+fun modal(base: Widget, dialog: Widget, dismiss_id: String) -> Widget {
+    return _widget(WidgetKind.Modal(dismiss_id), [base, dialog])
 }
 
 fun label(text: String) -> Widget {
@@ -288,6 +296,14 @@ fun measure(w: Widget, theme: Theme) {
                 w.mh = child.mh
             }
         },
+        Modal(id) -> {
+            if w.kids.len() >= 2 {
+                measure(w.kids[0], theme)
+                measure(w.kids[1], theme)
+                w.mw = w.kids[0].mw
+                w.mh = w.kids[0].mh
+            }
+        },
     }
     if w.wfix >= 0 {
         w.mw = w.wfix
@@ -336,6 +352,17 @@ fun arrange(w: Widget, box: Rect) {
                 }
                 w.scroll = off
                 arrange(child, Rect { x: box.x, y: box.y - off, w: box.w, h: child.mh })
+            }
+        },
+        Modal(id) -> {
+            if w.kids.len() >= 2 {
+                arrange(w.kids[0], box)
+                let dialog = w.kids[1]
+                let dw = dialog.mw
+                let dh = dialog.mh
+                let dx = box.x + (box.w - dw) / 2
+                let dy = box.y + (box.h - dh) / 2
+                arrange(dialog, Rect { x: dx, y: dy, w: dw, h: dh })
             }
         },
         _ -> {},
@@ -572,6 +599,13 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
             }
             f.unclip()
         },
+        Modal(id) -> {
+            if w.kids.len() >= 2 {
+                paint(w.kids[0], f, theme, it)
+                f.rect_alpha(w.box.x, w.box.y, w.box.w, w.box.h, Color.rgb(0, 0, 0), 150)
+                paint(w.kids[1], f, theme, it)
+            }
+        },
         _ -> {
             _paint_bg(w, f)
             let i = 0
@@ -636,9 +670,13 @@ struct Hit {
 
 // The topmost interactive widget under (x, y), if any.
 fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
-    // A scroll viewport clips hit-testing to its box, so off-screen children of a
-    // scrolled region are not clickable.
+    // A modal hit-tests its dialog, then swallows any other click as a dismiss,
+    // so the base underneath is never reached. A scroll viewport clips
+    // hit-testing to its box, so off-screen children are not clickable.
     match w.kind {
+        Modal(id) -> {
+            return _hit_modal(w, id, x, y)
+        },
         Scroll(id) -> {
             if !_contains(w.box, x, y) {
                 return None
@@ -778,6 +816,21 @@ fun _next_focus(w: Widget, current: String?) -> String? {
         None -> {
             return Some(ids[0])
         },
+    }
+    return None
+}
+
+fun _hit_modal(w: Widget, id: String, x: Int, y: Int) -> Hit? {
+    if w.kids.len() >= 2 {
+        match _hit(w.kids[1], x, y) {
+            Some(h) -> {
+                return Some(h)
+            },
+            None -> {},
+        }
+    }
+    if _contains(w.box, x, y) {
+        return Some(Hit { id, input: false })
     }
     return None
 }

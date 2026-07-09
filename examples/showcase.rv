@@ -1,5 +1,5 @@
 import "../lib" { Font, Color, Theme, WindowConfig }
-import "../widget" { Widget, column, row, panel, scroll, label, button, input, checkbox }
+import "../widget" { Widget, Justify, column, row, panel, scroll, modal, label, button, input, checkbox }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -7,6 +7,7 @@ struct Model {
     items: List<String>,
     draft: String,
     show_count: Bool,
+    about_open: Bool,
     theme: Theme,
 }
 
@@ -14,7 +15,7 @@ fun showcase_init() -> Model {
     let font = Font.load("assets/fonts/Go-Regular.ttf")
     let items: List<String> = []
     items.push("Scroll this list with the mouse wheel")
-    items.push("Type a todo and press Add")
+    items.push("Type a todo and press Add or Enter")
     items.push("Delete removes an item")
     items.push("Buttons show hover and press feedback")
     items.push("The input has a blinking caret")
@@ -25,22 +26,7 @@ fun showcase_init() -> Model {
     items.push("Self-contained, no system dependencies")
     items.push("Written entirely in Raven")
     items.push("This row is only reachable by scrolling")
-    return Model { items, draft: "", show_count: true, theme: Theme.dark(font) }
-}
-
-fun _with(m: Model, items: List<String>, draft: String, show_count: Bool) -> Model {
-    return Model { items, draft, show_count, theme: m.theme }
-}
-
-fun _append(items: List<String>, s: String) -> List<String> {
-    let out: List<String> = []
-    let i = 0
-    while i < items.len() {
-        out.push(items[i])
-        i = i + 1
-    }
-    out.push(s)
-    return out
+    return Model { items, draft: "", show_count: true, about_open: false, theme: Theme.dark(font) }
 }
 
 fun _remove_at(items: List<String>, idx: Int) -> List<String> {
@@ -55,20 +41,39 @@ fun _remove_at(items: List<String>, idx: Int) -> List<String> {
     return out
 }
 
+fun _add(m: Model) -> Model {
+    if m.draft != "" {
+        m.items.push(m.draft)
+        m.draft = ""
+    }
+    return m
+}
+
 fun _on_click(m: Model, id: String) -> Model {
     if id == "add" {
-        if m.draft == "" {
-            return m
-        }
-        return _with(m, _append(m.items, m.draft), "", m.show_count)
+        return _add(m)
     }
     if id == "show_count" {
-        return _with(m, m.items, m.draft, !m.show_count)
+        m.show_count = !m.show_count
+        return m
+    }
+    if id == "about" {
+        m.about_open = true
+        return m
+    }
+    if id == "close_about" {
+        m.about_open = false
+        return m
+    }
+    if id == "dismiss_about" {
+        m.about_open = false
+        return m
     }
     if id.starts_with("del-") {
         match id.substring(4, id.length()).parse_int() {
             Some(idx) -> {
-                return _with(m, _remove_at(m.items, idx), m.draft, m.show_count)
+                m.items = _remove_at(m.items, idx)
+                return m
             },
             None -> {},
         }
@@ -78,14 +83,7 @@ fun _on_click(m: Model, id: String) -> Model {
 
 fun _on_input(m: Model, id: String, s: String) -> Model {
     if id == "draft" {
-        return _with(m, m.items, s, m.show_count)
-    }
-    return m
-}
-
-fun _on_submit(m: Model, id: String) -> Model {
-    if id == "draft" {
-        return _on_click(m, "add")
+        m.draft = s
     }
     return m
 }
@@ -94,7 +92,7 @@ fun showcase_update(m: Model, e: UiEvent) -> Model {
     return match e {
         Click(id) -> _on_click(m, id),
         Input(id, s) -> _on_input(m, id, s),
-        Submit(id) -> _on_submit(m, id),
+        Submit(id) -> _add(m),
         Tick -> m,
     }
 }
@@ -143,17 +141,31 @@ fun sidebar(m: Model) -> Widget {
                         swatch(m.theme.muted),
                     ],
                 ).gap(8),
-                label("flex layout").size(15).color(m.theme.muted),
-                label("text and text input").size(15).color(m.theme.muted),
-                label("scrolling and clipping").size(15).color(m.theme.muted),
-                label("mouse and keyboard").size(15).color(m.theme.muted),
+                label("flex layout and alignment").size(15).color(m.theme.muted),
+                label("text, input, keyboard").size(15).color(m.theme.muted),
+                label("scrolling and modals").size(15).color(m.theme.muted),
                 checkbox("show_count", m.show_count, "Show item count").size(16),
+                button("about", "About").width(120),
             ],
         ).gap(12),
     ).bg(m.theme.surface).rounded(16).pad(22).width(300)
 }
 
-fun showcase_view(m: Model) -> Widget {
+fun about_dialog(m: Model) -> Widget {
+    return panel(
+        column(
+            [
+                label("About quill").size(26),
+                label("A self-contained GUI toolkit for Raven:").size(16).color(m.theme.muted),
+                label("native windowing, a batched OpenGL renderer,").size(15).color(m.theme.muted),
+                label("flexbox layout, and Elm-style state.").size(15).color(m.theme.muted),
+                row([button("close_about", "Close").width(120)]).justify(Justify.End),
+            ],
+        ).gap(14),
+    ).bg(m.theme.surface).rounded(16).pad(28).width(440)
+}
+
+fun main_view(m: Model) -> Widget {
     return row(
         [
             column(
@@ -169,6 +181,13 @@ fun showcase_view(m: Model) -> Widget {
             sidebar(m),
         ],
     ).pad(32).gap(28)
+}
+
+fun showcase_view(m: Model) -> Widget {
+    if m.about_open {
+        return modal(main_view(m), about_dialog(m), "dismiss_about")
+    }
+    return main_view(m)
 }
 
 fun showcase_theme(m: Model) -> Theme {

@@ -215,6 +215,12 @@ impl Frame {
         return
     }
 
+    // Fill a rectangle with an alpha (0 transparent, 255 opaque), for overlays.
+    fun rect_alpha(self, x: Int, y: Int, w: Int, h: Int, c: Color, alpha: Int) {
+        fill_rect(x, y, w, h, c.r, c.g, c.b, alpha)
+        return
+    }
+
     // Fill a rectangle with rounded corners of the given radius.
     fun rounded_rect(self, x: Int, y: Int, w: Int, h: Int, radius: Int, c: Color) {
         fill_round_rect(x, y, w, h, radius, c.r, c.g, c.b, 255)
