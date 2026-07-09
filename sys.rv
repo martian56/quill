@@ -1,0 +1,66 @@
+// Bindings for c/quill.c. This is the only module that declares the extern
+// symbols; everything else goes through these wrappers.
+
+import std/ffi { to_cstr, free_cstr }
+
+extern "C" {
+    fun q_init() -> Int
+    fun q_terminate()
+    fun q_window_open(width: Int, height: Int, title: CStr) -> Int
+    fun q_window_should_close(win: Int) -> Int
+    fun q_poll()
+    fun q_window_swap(win: Int)
+    fun q_window_close(win: Int)
+    fun q_framebuffer_width(win: Int) -> Int
+    fun q_framebuffer_height(win: Int) -> Int
+    fun q_clear_rgb(r: Int, g: Int, b: Int)
+}
+
+fun backend_init() -> Bool {
+    return q_init() == 1
+}
+
+fun backend_terminate() {
+    q_terminate()
+    return
+}
+
+// Opens a window with a current GL context, or 0 on failure.
+fun open_window(width: Int, height: Int, title: String) -> Int {
+    let c = to_cstr(title)
+    let win = q_window_open(width, height, c)
+    free_cstr(c)
+    return win
+}
+
+fun window_should_close(win: Int) -> Bool {
+    return q_window_should_close(win) == 1
+}
+
+fun poll_events() {
+    q_poll()
+    return
+}
+
+fun swap_buffers(win: Int) {
+    q_window_swap(win)
+    return
+}
+
+fun close_window(win: Int) {
+    q_window_close(win)
+    return
+}
+
+fun framebuffer_width(win: Int) -> Int {
+    return q_framebuffer_width(win)
+}
+
+fun framebuffer_height(win: Int) -> Int {
+    return q_framebuffer_height(win)
+}
+
+fun clear_rgb(r: Int, g: Int, b: Int) {
+    q_clear_rgb(r, g, b)
+    return
+}

@@ -1,0 +1,9 @@
+// Demo launcher. Run with: rvpm run -- hello
+import std/io { println }
+import "../examples/hello" { hello_main }
+
+fun main() {
+    if !hello_main() {
+        println("quill could not open a window; run this on a desktop session")
+    }
+}

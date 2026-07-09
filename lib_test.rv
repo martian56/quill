@@ -1,7 +1,37 @@
-import std/test { assert_true }
-import "./lib" { init, terminate }
+import std/test { assert_true, assert_eq }
+import "./sys" { backend_init, backend_terminate }
+import "./lib" { WindowConfig, Color, Step, next, quit }
 
-fun test_glfw_initializes() {
-    assert_true(init())
-    terminate()
+struct Probe {
+    n: Int,
+}
+
+fun test_backend_initializes() {
+    assert_true(backend_init())
+    backend_terminate()
+}
+
+fun test_window_config_builder() {
+    let cfg = WindowConfig.new().size(1280, 720).title("demo")
+    assert_eq(cfg.width, 1280)
+    assert_eq(cfg.height, 720)
+    assert_eq(cfg.title, "demo")
+}
+
+fun test_color_rgb() {
+    let c = Color.rgb(10, 20, 30)
+    assert_eq(c.r, 10)
+    assert_eq(c.g, 20)
+    assert_eq(c.b, 30)
+}
+
+fun test_step_next_continues() {
+    let s = next(Probe { n: 7 })
+    assert_true(!s.quit)
+    assert_eq(s.model.n, 7)
+}
+
+fun test_step_quit_stops() {
+    let s = quit(Probe { n: 1 })
+    assert_true(s.quit)
 }

@@ -1,13 +1,154 @@
-extern "C" {
-    fun glfwInit() -> Int
-    fun glfwTerminate()
+// quill: a GUI framework for Raven. An app is three pure functions over a
+// model, quill owns the window and the frame loop:
+//
+//     import "github.com/martian56/quill" {
+//         App, Event, Frame, Step, Color, WindowConfig, next, quit, run
+//     }
+//
+//     struct Model { ticks: Int }
+//
+//     fun init() -> Model {
+//         return Model { ticks: 0 }
+//     }
+//
+//     fun update(m: Model, e: Event) -> Step<Model> {
+//         return next(Model { ticks: m.ticks + 1 })
+//     }
+//
+//     fun view(m: Model, f: Frame) {
+//         f.clear(Color.rgb(24, 24, 32))
+//     }
+//
+//     fun main() {
+//         let win = WindowConfig.new().size(960, 600).title("quill")
+//         run<Model>(App { init: init, update: update, view: view, window: win })
+//     }
+
+import "./sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb }
+
+// An 8-bit-per-channel opaque color.
+struct Color {
+    r: Int,
+    g: Int,
+    b: Int,
 }
 
-fun init() -> Bool {
-    return glfwInit() == 1
+impl Color {
+    fun rgb(r: Int, g: Int, b: Int) -> Color {
+        return Color { r, g, b }
+    }
 }
 
-fun terminate() {
-    glfwTerminate()
-    return
+// How the window is created. Build it fluently from WindowConfig.new().
+struct WindowConfig {
+    width: Int,
+    height: Int,
+    title: String,
+}
+
+impl WindowConfig {
+    fun new() -> WindowConfig {
+        return WindowConfig { width: 960, height: 600, title: "quill" }
+    }
+
+    fun size(self, width: Int, height: Int) -> WindowConfig {
+        return WindowConfig { width, height, title: self.title }
+    }
+
+    fun title(self, title: String) -> WindowConfig {
+        return WindowConfig { width: self.width, height: self.height, title }
+    }
+}
+
+// Everything update can react to. Tick fires once per frame; Resize arrives
+// with the new framebuffer size; Close fires when the window is dismissed.
+enum Event {
+    Tick,
+    Resize(Int, Int),
+    Close,
+}
+
+// What update returns: the model to carry forward, and whether to stop. Build
+// it with next or quit.
+struct Step<M> {
+    model: M,
+    quit: Bool,
+}
+
+fun next<M>(m: M) -> Step<M> {
+    return Step { model: m, quit: false }
+}
+
+fun quit<M>(m: M) -> Step<M> {
+    return Step { model: m, quit: true }
+}
+
+// The surface a view draws one frame onto.
+struct Frame {
+    width: Int,
+    height: Int,
+}
+
+impl Frame {
+    fun clear(self, c: Color) {
+        clear_rgb(c.r, c.g, c.b)
+        return
+    }
+}
+
+// A whole application: pure functions over a model, plus the window to open.
+struct App<M> {
+    init: fun() -> M,
+    update: fun(M, Event) -> Step<M>,
+    view: fun(M, Frame) -> Unit,
+    window: WindowConfig,
+}
+
+// Open the window and run the app until update quits or the window closes.
+// Returns false without opening anything when the backend cannot start.
+fun run<M>(app: App<M>) -> Bool {
+    if !backend_init() {
+        return false
+    }
+    let cfg = app.window
+    let win = open_window(cfg.width, cfg.height, cfg.title)
+    if win == 0 {
+        backend_terminate()
+        return false
+    }
+
+    let model = (app.init)()
+    let last_w = framebuffer_width(win)
+    let last_h = framebuffer_height(win)
+    let running = true
+    while running {
+        if window_should_close(win) {
+            let closed = (app.update)(model, Event.Close)
+            model = closed.model
+            running = false
+        } else {
+            let w = framebuffer_width(win)
+            let h = framebuffer_height(win)
+            if w != last_w || h != last_h {
+                let resized = (app.update)(model, Event.Resize(w, h))
+                model = resized.model
+                last_w = w
+                last_h = h
+            }
+            let step = (app.update)(model, Event.Tick)
+            model = step.model
+            if step.quit {
+                running = false
+            }
+        }
+
+        let frame = Frame { width: framebuffer_width(win), height: framebuffer_height(win) }
+        (app.view)(model, frame)
+        swap_buffers(win)
+        poll_events()
+    }
+
+    close_window(win)
+    backend_terminate()
+    return true
 }

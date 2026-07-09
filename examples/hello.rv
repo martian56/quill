@@ -1,0 +1,29 @@
+import "../lib" { App, Event, Frame, Step, Color, WindowConfig, next, run }
+
+struct Model {
+    ticks: Int,
+}
+
+fun hello_init() -> Model {
+    return Model { ticks: 0 }
+}
+
+fun hello_update(m: Model, e: Event) -> Step<Model> {
+    return next(Model { ticks: m.ticks + 1 })
+}
+
+fun hello_view(m: Model, f: Frame) {
+    f.clear(Color.rgb(24, 24, 32))
+}
+
+fun hello_main() -> Bool {
+    let win = WindowConfig.new().size(960, 600).title("quill: hello")
+    return run<Model>(
+        App {
+            init: hello_init,
+            update: hello_update,
+            view: hello_view,
+            window: win,
+        },
+    )
+}
