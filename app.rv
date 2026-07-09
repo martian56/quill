@@ -17,7 +17,9 @@
 //     }
 
 import "./lib" { Theme, Rect, Window, WindowConfig, start, stop }
-import "./widget" { Widget, Interaction, measure, arrange, paint, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at }
+import "./widget" { Widget, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at }
+import "./layout" { measure, arrange }
+import "./paint" { Interaction, paint }
 import std/string
 import std/collections { Map, empty_map }
 

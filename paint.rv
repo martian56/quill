@@ -1,0 +1,222 @@
+// quill paint: draw a laid-out widget tree onto a Frame, applying hover, press,
+// and focus feedback. render lays a tree out (via layout) and paints it.
+
+import "./lib" { Frame, Rect, Color, Text, Theme }
+import "./widget" { Widget, WidgetKind, _contains }
+import "./layout" { measure, arrange }
+
+const BUTTON_RADIUS: Int = 8
+const INPUT_PAD_X: Int = 12
+const INPUT_RADIUS: Int = 8
+const CHECK_GAP: Int = 10
+const SLIDER_TRACK: Int = 6
+const SLIDER_R: Int = 9
+
+// The interaction state paint reads for hover, press, and focus feedback. Build
+// _inert() when there is no interaction (a plain render).
+struct Interaction {
+    x: Int,
+    y: Int,
+    down: Bool,
+    focus: String?,
+    caret_on: Bool,
+}
+
+fun _inert() -> Interaction {
+    return Interaction { x: -1, y: -1, down: false, focus: None, caret_on: true }
+}
+
+fun _tint_or(w: Widget, fallback: Color) -> Color {
+    return match w.tint {
+        Some(c) -> c,
+        None -> fallback,
+    }
+}
+
+fun _fill_or(w: Widget, fallback: Color) -> Color {
+    return match w.fill {
+        Some(c) -> c,
+        None -> fallback,
+    }
+}
+
+fun _paint_bg(w: Widget, f: Frame) {
+    match w.fill {
+        Some(c) -> {
+            if w.corner > 0 {
+                f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, w.corner, c)
+            } else {
+                f.rect(w.box.x, w.box.y, w.box.w, w.box.h, c)
+            }
+        },
+        None -> {},
+    }
+    return
+}
+
+fun _button_bg(w: Widget, theme: Theme, it: Interaction) -> Color {
+    let base = _fill_or(w, theme.accent)
+    if !_contains(w.box, it.x, it.y) {
+        return base
+    }
+    if it.down {
+        return base.darken(12)
+    }
+    return base.lighten(12)
+}
+
+fun _is_focused(it: Interaction, id: String) -> Bool {
+    return match it.focus {
+        Some(fid) -> fid == id,
+        None -> false,
+    }
+}
+
+// Walk the laid-out tree and draw it, applying interaction feedback.
+fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
+    match w.kind {
+        Label(text) -> {
+            _paint_bg(w, f)
+            let col = _tint_or(w, theme.text)
+            let lh = theme.font.line_height(w.tsize)
+            let ty = w.box.y + (w.box.h - lh) / 2
+            f.text(Text.new(theme.font, text).at(w.box.x, ty).size(w.tsize).color(col))
+        },
+        Button(id, text) -> {
+            let bgc = _button_bg(w, theme, it)
+            f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, BUTTON_RADIUS, bgc)
+            let tw = theme.font.width(w.tsize, text)
+            let lh = theme.font.line_height(w.tsize)
+            let tx = w.box.x + (w.box.w - tw) / 2
+            let ty = w.box.y + (w.box.h - lh) / 2
+            let col = _tint_or(w, theme.on_accent)
+            f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
+        },
+        Input(id, value) -> {
+            _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on)
+        },
+        Checkbox(id, checked, text) -> {
+            _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
+        },
+        Slider(id, value, lo, hi) -> {
+            _paint_slider(w, f, theme, value, lo, hi, _contains(w.box, it.x, it.y))
+        },
+        Image(handle, iw, ih) -> {
+            f.image(handle, w.box.x, w.box.y, w.box.w, w.box.h)
+        },
+        Divider -> {
+            f.rect(w.box.x, w.box.y, w.box.w, 1, theme.border)
+        },
+        Scroll(id) -> {
+            _paint_bg(w, f)
+            f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
+            let i = 0
+            while i < w.kids.len() {
+                paint(w.kids[i], f, theme, it)
+                i = i + 1
+            }
+            f.unclip()
+        },
+        Modal(id) -> {
+            if w.kids.len() >= 2 {
+                paint(w.kids[0], f, theme, it)
+                f.rect_alpha(w.box.x, w.box.y, w.box.w, w.box.h, Color.rgb(0, 0, 0), 150)
+                paint(w.kids[1], f, theme, it)
+            }
+        },
+        _ -> {
+            _paint_bg(w, f)
+            let i = 0
+            while i < w.kids.len() {
+                paint(w.kids[i], f, theme, it)
+                i = i + 1
+            }
+        },
+    }
+    return
+}
+
+fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: String, hovered: Bool) {
+    let box = theme.font.line_height(w.tsize)
+    let bx = w.box.x
+    let by = w.box.y
+    let fill = theme.field
+    if checked {
+        fill = theme.accent
+    }
+    if hovered {
+        fill = fill.lighten(12)
+    }
+    f.rounded_rect(bx, by, box, box, 5, fill)
+    if checked {
+        f.text(Text.new(theme.font, "✓").at(bx + box / 6, by).size(w.tsize).color(theme.on_accent))
+    }
+    f.text(Text.new(theme.font, text).at(bx + box + CHECK_GAP, by).size(w.tsize).color(theme.text))
+    return
+}
+
+// Handle-fill width for a slider value, clamped to the usable track.
+fun _slider_fill(w: Widget, value: Int, lo: Int, hi: Int) -> Int {
+    let usable = w.box.w - 2 * SLIDER_R
+    let range = hi - lo
+    if range <= 0 {
+        return 0
+    }
+    let t = (value - lo) * usable / range
+    if t < 0 {
+        return 0
+    }
+    if t > usable {
+        return usable
+    }
+    return t
+}
+
+fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: Int, lo: Int, hi: Int, hovered: Bool) {
+    let cy = w.box.y + w.box.h / 2
+    let ty = cy - SLIDER_TRACK / 2
+    let x0 = w.box.x + SLIDER_R
+    f.rounded_rect(x0, ty, w.box.w - 2 * SLIDER_R, SLIDER_TRACK, SLIDER_TRACK / 2, theme.field)
+    let fill = _slider_fill(w, value, lo, hi)
+    f.rounded_rect(x0, ty, fill, SLIDER_TRACK, SLIDER_TRACK / 2, theme.accent)
+    let hc = theme.accent
+    if hovered {
+        hc = theme.accent.lighten(14)
+    }
+    f.rounded_rect(x0 + fill - SLIDER_R, cy - SLIDER_R, 2 * SLIDER_R, 2 * SLIDER_R, SLIDER_R, hc)
+    return
+}
+
+fun _paint_input(w: Widget, f: Frame, theme: Theme, value: String, focused: Bool, caret_on: Bool) {
+    let border = theme.field
+    if focused {
+        border = theme.accent
+    }
+    f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, INPUT_RADIUS, border)
+    f.rounded_rect(
+        w.box.x + 2,
+        w.box.y + 2,
+        w.box.w - 4,
+        w.box.h - 4,
+        INPUT_RADIUS - 1,
+        theme.field,
+    )
+    let lh = theme.font.line_height(w.tsize)
+    let tx = w.box.x + INPUT_PAD_X
+    let ty = w.box.y + (w.box.h - lh) / 2
+    f.text(Text.new(theme.font, value).at(tx, ty).size(w.tsize).color(theme.text))
+    if focused && caret_on {
+        let caret = tx + theme.font.width(w.tsize, value) + 1
+        f.rect(caret, ty, 2, lh, theme.accent)
+    }
+    return
+}
+
+// Lay a tree out to fill the frame and paint it. Call this from a view when
+// driving the core loop yourself; run_ui (in the app module) does it for you.
+fun render(f: Frame, theme: Theme, root: Widget) {
+    measure(root, theme)
+    arrange(root, Rect { x: 0, y: 0, w: f.width, h: f.height })
+    paint(root, f, theme, _inert())
+    return
+}

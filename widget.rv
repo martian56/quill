@@ -1,31 +1,20 @@
-// quill's widget toolkit: a retained tree the framework measures, arranges with
-// a flex layout, and paints onto a Frame. Build a tree in view and hand it to
-// render:
+// quill's widget model: the retained tree, its builders and chained modifiers,
+// and the queries the runtime runs over it (hit-testing, focus order, scroll
+// geometry, input lookup). Layout lives in layout.rv and drawing in paint.rv, so
+// the dependency runs one way (widget -> layout -> paint), since Raven forbids
+// import cycles. Build a tree with the builders:
 //
-//     import "github.com/martian56/quill/widget" { column, label, button, render }
+//     import "github.com/martian56/quill/widget" { column, row, label, button, input }
 //
-//     fun view(m: Model, f: Frame) {
-//         render(f, m.theme, column([
-//             label("count: ${m.count}").size(28),
-//             button("inc", "Add one"),
-//         ]).pad(24).gap(16))
-//     }
+//     column([label("count: ${m.count}").size(28), button("inc", "Add one")]).pad(24).gap(16)
 
-import "./lib" { Frame, Rect, Color, Text, Theme }
+import "./lib" { Color, Rect }
 import std/string
 import std/collections { Map }
 
-const BUTTON_PAD_X: Int = 16
-const BUTTON_PAD_Y: Int = 9
-const BUTTON_RADIUS: Int = 8
-const INPUT_PAD_X: Int = 12
-const INPUT_PAD_Y: Int = 9
-const INPUT_RADIUS: Int = 8
-const INPUT_MIN_W: Int = 160
-const CHECK_GAP: Int = 10
-const SLIDER_W: Int = 200
-const SLIDER_H: Int = 24
-const SLIDER_TRACK: Int = 6
+// Slider handle radius, shared by the value query here and the painter. Raven
+// folds consts per module, so layout.rv and paint.rv keep their own tuning
+// constants rather than importing these.
 const SLIDER_R: Int = 9
 
 // Cross-axis alignment of a container's children (align-items).
@@ -234,508 +223,8 @@ impl Widget {
     }
 }
 
-fun _tint_or(w: Widget, fallback: Color) -> Color {
-    return match w.tint {
-        Some(c) -> c,
-        None -> fallback,
-    }
-}
-
-// Fill each child's desired size (mw, mh), bottom up.
-fun measure(w: Widget, theme: Theme) {
-    match w.kind {
-        Label(text) -> {
-            w.mw = theme.font.width(w.tsize, text)
-            w.mh = theme.font.line_height(w.tsize)
-        },
-        Button(id, text) -> {
-            w.mw = theme.font.width(w.tsize, text) + 2 * BUTTON_PAD_X
-            w.mh = theme.font.line_height(w.tsize) + 2 * BUTTON_PAD_Y
-        },
-        Input(id, value) -> {
-            let content = theme.font.width(w.tsize, value) + 2 * INPUT_PAD_X + 24
-            w.mw = content
-            if content < INPUT_MIN_W {
-                w.mw = INPUT_MIN_W
-            }
-            w.mh = theme.font.line_height(w.tsize) + 2 * INPUT_PAD_Y
-        },
-        Checkbox(id, checked, text) -> {
-            let box = theme.font.line_height(w.tsize)
-            w.mw = box + CHECK_GAP + theme.font.width(w.tsize, text)
-            w.mh = box
-        },
-        Slider(id, value, lo, hi) -> {
-            w.mw = SLIDER_W
-            w.mh = SLIDER_H
-        },
-        Image(handle, iw, ih) -> {
-            w.mw = iw
-            w.mh = ih
-        },
-        Divider -> {
-            w.mw = 0
-            w.mh = 1
-        },
-        Column -> {
-            let total = 0
-            let cross = 0
-            let i = 0
-            while i < w.kids.len() {
-                let kid = w.kids[i]
-                measure(kid, theme)
-                total = total + kid.mh
-                if kid.mw > cross {
-                    cross = kid.mw
-                }
-                i = i + 1
-            }
-            total = total + _gaps(w.spacing, w.kids.len())
-            w.mw = cross + 2 * w.inset
-            w.mh = total + 2 * w.inset
-        },
-        Row -> {
-            let total = 0
-            let cross = 0
-            let i = 0
-            while i < w.kids.len() {
-                let kid = w.kids[i]
-                measure(kid, theme)
-                total = total + kid.mw
-                if kid.mh > cross {
-                    cross = kid.mh
-                }
-                i = i + 1
-            }
-            total = total + _gaps(w.spacing, w.kids.len())
-            w.mw = total + 2 * w.inset
-            w.mh = cross + 2 * w.inset
-        },
-        Panel -> {
-            let cw = 0
-            let ch = 0
-            if w.kids.len() > 0 {
-                let child = w.kids[0]
-                measure(child, theme)
-                cw = child.mw
-                ch = child.mh
-            }
-            w.mw = cw + 2 * w.inset
-            w.mh = ch + 2 * w.inset
-        },
-        Scroll(id) -> {
-            if w.kids.len() > 0 {
-                let child = w.kids[0]
-                measure(child, theme)
-                w.mw = child.mw
-                w.mh = child.mh
-            }
-        },
-        Modal(id) -> {
-            if w.kids.len() >= 2 {
-                measure(w.kids[0], theme)
-                measure(w.kids[1], theme)
-                w.mw = w.kids[0].mw
-                w.mh = w.kids[0].mh
-            }
-        },
-    }
-    if w.wfix >= 0 {
-        w.mw = w.wfix
-    }
-    if w.hfix >= 0 {
-        w.mh = w.hfix
-    }
-    return
-}
-
-fun _gaps(spacing: Int, n: Int) -> Int {
-    if n > 1 {
-        return spacing * (n - 1)
-    }
-    return 0
-}
-
-// Place w into box, then recurse into children.
-fun arrange(w: Widget, box: Rect) {
-    w.box = box
-    match w.kind {
-        Column -> {
-            _arrange_column(w, box.inset(w.inset))
-        },
-        Row -> {
-            _arrange_row(w, box.inset(w.inset))
-        },
-        Panel -> {
-            if w.kids.len() > 0 {
-                arrange(w.kids[0], box.inset(w.inset))
-            }
-        },
-        Scroll(id) -> {
-            if w.kids.len() > 0 {
-                let child = w.kids[0]
-                let max_off = child.mh - box.h
-                if max_off < 0 {
-                    max_off = 0
-                }
-                let off = w.scroll
-                if off < 0 {
-                    off = 0
-                }
-                if off > max_off {
-                    off = max_off
-                }
-                w.scroll = off
-                arrange(child, Rect { x: box.x, y: box.y - off, w: box.w, h: child.mh })
-            }
-        },
-        Modal(id) -> {
-            if w.kids.len() >= 2 {
-                arrange(w.kids[0], box)
-                let dialog = w.kids[1]
-                let dw = dialog.mw
-                let dh = dialog.mh
-                let dx = box.x + (box.w - dw) / 2
-                let dy = box.y + (box.h - dh) / 2
-                arrange(dialog, Rect { x: dx, y: dy, w: dw, h: dh })
-            }
-        },
-        _ -> {},
-    }
-    return
-}
-
-fun _arrange_column(w: Widget, inner: Rect) {
-    let n = w.kids.len()
-    let content = 0
-    let flex_total = 0
-    let i = 0
-    while i < n {
-        let kid = w.kids[i]
-        if kid.flex == 0 {
-            content = content + kid.mh
-        } else {
-            flex_total = flex_total + kid.flex
-        }
-        i = i + 1
-    }
-    content = content + _gaps(w.spacing, n)
-    let leftover = inner.h - content
-    if leftover < 0 {
-        leftover = 0
-    }
-    let cursor = inner.y + _main_offset(w.main, leftover, flex_total)
-    let extra = _main_extra_gap(w.main, leftover, flex_total, n)
-    i = 0
-    while i < n {
-        let kid = w.kids[i]
-        let kh = kid.mh
-        if kid.flex > 0 {
-            kh = _share(leftover, kid.flex, flex_total)
-        }
-        let kw = _cross_size(w.cross, kid.wfix, kid.mw, inner.w)
-        let kx = inner.x + _cross_offset(w.cross, kw, inner.w)
-        arrange(kid, Rect { x: kx, y: cursor, w: kw, h: kh })
-        cursor = cursor + kh + w.spacing + extra
-        i = i + 1
-    }
-    return
-}
-
-fun _arrange_row(w: Widget, inner: Rect) {
-    let n = w.kids.len()
-    let content = 0
-    let flex_total = 0
-    let i = 0
-    while i < n {
-        let kid = w.kids[i]
-        if kid.flex == 0 {
-            content = content + kid.mw
-        } else {
-            flex_total = flex_total + kid.flex
-        }
-        i = i + 1
-    }
-    content = content + _gaps(w.spacing, n)
-    let leftover = inner.w - content
-    if leftover < 0 {
-        leftover = 0
-    }
-    let cursor = inner.x + _main_offset(w.main, leftover, flex_total)
-    let extra = _main_extra_gap(w.main, leftover, flex_total, n)
-    i = 0
-    while i < n {
-        let kid = w.kids[i]
-        let kw = kid.mw
-        if kid.flex > 0 {
-            kw = _share(leftover, kid.flex, flex_total)
-        }
-        let kh = _cross_size(w.cross, kid.hfix, kid.mh, inner.h)
-        let ky = inner.y + _cross_offset(w.cross, kh, inner.h)
-        arrange(kid, Rect { x: cursor, y: ky, w: kw, h: kh })
-        cursor = cursor + kw + w.spacing + extra
-        i = i + 1
-    }
-    return
-}
-
-fun _share(leftover: Int, weight: Int, total: Int) -> Int {
-    if total > 0 {
-        return leftover * weight / total
-    }
-    return 0
-}
-
-// Where the packed block of children starts along the main axis.
-fun _main_offset(j: Justify, leftover: Int, flex_total: Int) -> Int {
-    if flex_total > 0 {
-        return 0
-    }
-    match j {
-        Center -> {
-            return leftover / 2
-        },
-        End -> {
-            return leftover
-        },
-        _ -> {},
-    }
-    return 0
-}
-
-// Extra spacing added between children for space-between.
-fun _main_extra_gap(j: Justify, leftover: Int, flex_total: Int, n: Int) -> Int {
-    if flex_total > 0 {
-        return 0
-    }
-    match j {
-        Between -> {
-            if n > 1 {
-                return leftover / (n - 1)
-            }
-        },
-        _ -> {},
-    }
-    return 0
-}
-
-// A child's size on the cross axis: a fixed size wins, else stretch fills the
-// container and any other alignment uses the measured size.
-fun _cross_size(a: Align, fix: Int, measured: Int, inner_cross: Int) -> Int {
-    if fix >= 0 {
-        return fix
-    }
-    match a {
-        Stretch -> {
-            return inner_cross
-        },
-        _ -> {},
-    }
-    return measured
-}
-
-// A child's offset on the cross axis for its alignment.
-fun _cross_offset(a: Align, size: Int, inner_cross: Int) -> Int {
-    match a {
-        Center -> {
-            return (inner_cross - size) / 2
-        },
-        End -> {
-            return inner_cross - size
-        },
-        _ -> {},
-    }
-    return 0
-}
-
-fun _paint_bg(w: Widget, f: Frame) {
-    match w.fill {
-        Some(c) -> {
-            if w.corner > 0 {
-                f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, w.corner, c)
-            } else {
-                f.rect(w.box.x, w.box.y, w.box.w, w.box.h, c)
-            }
-        },
-        None -> {},
-    }
-    return
-}
-
-// The interaction state paint reads for hover, press, and focus feedback. Build
-// _inert() when there is no interaction (a plain render).
-struct Interaction {
-    x: Int,
-    y: Int,
-    down: Bool,
-    focus: String?,
-    caret_on: Bool,
-}
-
-fun _inert() -> Interaction {
-    return Interaction { x: -1, y: -1, down: false, focus: None, caret_on: true }
-}
-
 fun _contains(r: Rect, x: Int, y: Int) -> Bool {
     return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
-}
-
-fun _button_bg(w: Widget, theme: Theme, it: Interaction) -> Color {
-    let base = _fill_or(w, theme.accent)
-    if !_contains(w.box, it.x, it.y) {
-        return base
-    }
-    if it.down {
-        return base.darken(12)
-    }
-    return base.lighten(12)
-}
-
-fun _is_focused(it: Interaction, id: String) -> Bool {
-    return match it.focus {
-        Some(fid) -> fid == id,
-        None -> false,
-    }
-}
-
-// Walk the laid-out tree and draw it, applying interaction feedback.
-fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
-    match w.kind {
-        Label(text) -> {
-            _paint_bg(w, f)
-            let col = _tint_or(w, theme.text)
-            let lh = theme.font.line_height(w.tsize)
-            let ty = w.box.y + (w.box.h - lh) / 2
-            f.text(Text.new(theme.font, text).at(w.box.x, ty).size(w.tsize).color(col))
-        },
-        Button(id, text) -> {
-            let bgc = _button_bg(w, theme, it)
-            f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, BUTTON_RADIUS, bgc)
-            let tw = theme.font.width(w.tsize, text)
-            let lh = theme.font.line_height(w.tsize)
-            let tx = w.box.x + (w.box.w - tw) / 2
-            let ty = w.box.y + (w.box.h - lh) / 2
-            let col = _tint_or(w, theme.on_accent)
-            f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
-        },
-        Input(id, value) -> {
-            _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on)
-        },
-        Checkbox(id, checked, text) -> {
-            _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
-        },
-        Slider(id, value, lo, hi) -> {
-            _paint_slider(w, f, theme, value, lo, hi, _contains(w.box, it.x, it.y))
-        },
-        Image(handle, iw, ih) -> {
-            f.image(handle, w.box.x, w.box.y, w.box.w, w.box.h)
-        },
-        Divider -> {
-            f.rect(w.box.x, w.box.y, w.box.w, 1, theme.border)
-        },
-        Scroll(id) -> {
-            _paint_bg(w, f)
-            f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
-            let i = 0
-            while i < w.kids.len() {
-                paint(w.kids[i], f, theme, it)
-                i = i + 1
-            }
-            f.unclip()
-        },
-        Modal(id) -> {
-            if w.kids.len() >= 2 {
-                paint(w.kids[0], f, theme, it)
-                f.rect_alpha(w.box.x, w.box.y, w.box.w, w.box.h, Color.rgb(0, 0, 0), 150)
-                paint(w.kids[1], f, theme, it)
-            }
-        },
-        _ -> {
-            _paint_bg(w, f)
-            let i = 0
-            while i < w.kids.len() {
-                paint(w.kids[i], f, theme, it)
-                i = i + 1
-            }
-        },
-    }
-    return
-}
-
-fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: String, hovered: Bool) {
-    let box = theme.font.line_height(w.tsize)
-    let bx = w.box.x
-    let by = w.box.y
-    let fill = theme.field
-    if checked {
-        fill = theme.accent
-    }
-    if hovered {
-        fill = fill.lighten(12)
-    }
-    f.rounded_rect(bx, by, box, box, 5, fill)
-    if checked {
-        f.text(Text.new(theme.font, "✓").at(bx + box / 6, by).size(w.tsize).color(theme.on_accent))
-    }
-    f.text(Text.new(theme.font, text).at(bx + box + CHECK_GAP, by).size(w.tsize).color(theme.text))
-    return
-}
-
-// Handle-center x for a slider value, and the usable track width.
-fun _slider_fill(w: Widget, value: Int, lo: Int, hi: Int) -> Int {
-    let usable = w.box.w - 2 * SLIDER_R
-    let range = hi - lo
-    if range <= 0 {
-        return 0
-    }
-    let t = (value - lo) * usable / range
-    if t < 0 {
-        return 0
-    }
-    if t > usable {
-        return usable
-    }
-    return t
-}
-
-fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: Int, lo: Int, hi: Int, hovered: Bool) {
-    let cy = w.box.y + w.box.h / 2
-    let ty = cy - SLIDER_TRACK / 2
-    let x0 = w.box.x + SLIDER_R
-    f.rounded_rect(x0, ty, w.box.w - 2 * SLIDER_R, SLIDER_TRACK, SLIDER_TRACK / 2, theme.field)
-    let fill = _slider_fill(w, value, lo, hi)
-    f.rounded_rect(x0, ty, fill, SLIDER_TRACK, SLIDER_TRACK / 2, theme.accent)
-    let hc = theme.accent
-    if hovered {
-        hc = theme.accent.lighten(14)
-    }
-    f.rounded_rect(x0 + fill - SLIDER_R, cy - SLIDER_R, 2 * SLIDER_R, 2 * SLIDER_R, SLIDER_R, hc)
-    return
-}
-
-fun _paint_input(w: Widget, f: Frame, theme: Theme, value: String, focused: Bool, caret_on: Bool) {
-    let border = theme.field
-    if focused {
-        border = theme.accent
-    }
-    f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, INPUT_RADIUS, border)
-    f.rounded_rect(
-        w.box.x + 2,
-        w.box.y + 2,
-        w.box.w - 4,
-        w.box.h - 4,
-        INPUT_RADIUS - 1,
-        theme.field,
-    )
-    let lh = theme.font.line_height(w.tsize)
-    let tx = w.box.x + INPUT_PAD_X
-    let ty = w.box.y + (w.box.h - lh) / 2
-    f.text(Text.new(theme.font, value).at(tx, ty).size(w.tsize).color(theme.text))
-    if focused && caret_on {
-        let caret = tx + theme.font.width(w.tsize, value) + 1
-        f.rect(caret, ty, 2, lh, theme.accent)
-    }
-    return
 }
 
 // A hit-tested target: an interactive widget's id, whether it is a text input,
@@ -798,6 +287,21 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
     return None
 }
 
+fun _hit_modal(w: Widget, id: String, x: Int, y: Int) -> Hit? {
+    if w.kids.len() >= 2 {
+        match _hit(w.kids[1], x, y) {
+            Some(h) -> {
+                return Some(h)
+            },
+            None -> {},
+        }
+    }
+    if _contains(w.box, x, y) {
+        return Some(Hit { id, input: false, drag: false })
+    }
+    return None
+}
+
 // Inject each scroll container's saved offset before layout.
 fun _apply_scroll(w: Widget, offsets: Map<String, Int>) {
     match w.kind {
@@ -844,7 +348,7 @@ fun _scroll_id(w: Widget) -> String {
     }
 }
 
-// The content and viewport heights of a scroll container, for clamping.
+// The scrollable overshoot (content height beyond the viewport) of a scroll box.
 fun _scroll_extent(w: Widget) -> Int {
     if w.kids.len() == 0 {
         return 0
@@ -899,21 +403,6 @@ fun _next_focus(w: Widget, current: String?) -> String? {
         None -> {
             return Some(ids[0])
         },
-    }
-    return None
-}
-
-fun _hit_modal(w: Widget, id: String, x: Int, y: Int) -> Hit? {
-    if w.kids.len() >= 2 {
-        match _hit(w.kids[1], x, y) {
-            Some(h) -> {
-                return Some(h)
-            },
-            None -> {},
-        }
-    }
-    if _contains(w.box, x, y) {
-        return Some(Hit { id, input: false, drag: false })
     }
     return None
 }
@@ -997,20 +486,4 @@ fun _drop_last(s: String) -> String {
         }
     }
     return s.substring(0, cut)
-}
-
-fun _fill_or(w: Widget, fallback: Color) -> Color {
-    return match w.fill {
-        Some(c) -> c,
-        None -> fallback,
-    }
-}
-
-// Lay a tree out to fill the frame and paint it. Call this from a view when
-// driving the core loop yourself; run_ui (in the app module) does it for you.
-fun render(f: Frame, theme: Theme, root: Widget) {
-    measure(root, theme)
-    arrange(root, Rect { x: 0, y: 0, w: f.width, h: f.height })
-    paint(root, f, theme, _inert())
-    return
 }

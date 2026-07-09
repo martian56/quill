@@ -1,0 +1,322 @@
+// quill layout: the flex measure and arrange passes over a widget tree. measure
+// fills each node's desired size (mw, mh) bottom up; arrange places each node in
+// a box, honoring grow, alignment, and scroll offsets.
+
+import "./lib" { Theme, Rect }
+import "./widget" { Widget, WidgetKind, Align, Justify }
+
+const BUTTON_PAD_X: Int = 16
+const BUTTON_PAD_Y: Int = 9
+const INPUT_PAD_X: Int = 12
+const INPUT_PAD_Y: Int = 9
+const INPUT_MIN_W: Int = 160
+const CHECK_GAP: Int = 10
+const SLIDER_W: Int = 200
+const SLIDER_H: Int = 24
+
+// Fill each child's desired size (mw, mh), bottom up.
+fun measure(w: Widget, theme: Theme) {
+    match w.kind {
+        Label(text) -> {
+            w.mw = theme.font.width(w.tsize, text)
+            w.mh = theme.font.line_height(w.tsize)
+        },
+        Button(id, text) -> {
+            w.mw = theme.font.width(w.tsize, text) + 2 * BUTTON_PAD_X
+            w.mh = theme.font.line_height(w.tsize) + 2 * BUTTON_PAD_Y
+        },
+        Input(id, value) -> {
+            let content = theme.font.width(w.tsize, value) + 2 * INPUT_PAD_X + 24
+            w.mw = content
+            if content < INPUT_MIN_W {
+                w.mw = INPUT_MIN_W
+            }
+            w.mh = theme.font.line_height(w.tsize) + 2 * INPUT_PAD_Y
+        },
+        Checkbox(id, checked, text) -> {
+            let box = theme.font.line_height(w.tsize)
+            w.mw = box + CHECK_GAP + theme.font.width(w.tsize, text)
+            w.mh = box
+        },
+        Slider(id, value, lo, hi) -> {
+            w.mw = SLIDER_W
+            w.mh = SLIDER_H
+        },
+        Image(handle, iw, ih) -> {
+            w.mw = iw
+            w.mh = ih
+        },
+        Divider -> {
+            w.mw = 0
+            w.mh = 1
+        },
+        Column -> {
+            let total = 0
+            let cross = 0
+            let i = 0
+            while i < w.kids.len() {
+                let kid = w.kids[i]
+                measure(kid, theme)
+                total = total + kid.mh
+                if kid.mw > cross {
+                    cross = kid.mw
+                }
+                i = i + 1
+            }
+            total = total + _gaps(w.spacing, w.kids.len())
+            w.mw = cross + 2 * w.inset
+            w.mh = total + 2 * w.inset
+        },
+        Row -> {
+            let total = 0
+            let cross = 0
+            let i = 0
+            while i < w.kids.len() {
+                let kid = w.kids[i]
+                measure(kid, theme)
+                total = total + kid.mw
+                if kid.mh > cross {
+                    cross = kid.mh
+                }
+                i = i + 1
+            }
+            total = total + _gaps(w.spacing, w.kids.len())
+            w.mw = total + 2 * w.inset
+            w.mh = cross + 2 * w.inset
+        },
+        Panel -> {
+            let cw = 0
+            let ch = 0
+            if w.kids.len() > 0 {
+                let child = w.kids[0]
+                measure(child, theme)
+                cw = child.mw
+                ch = child.mh
+            }
+            w.mw = cw + 2 * w.inset
+            w.mh = ch + 2 * w.inset
+        },
+        Scroll(id) -> {
+            if w.kids.len() > 0 {
+                let child = w.kids[0]
+                measure(child, theme)
+                w.mw = child.mw
+                w.mh = child.mh
+            }
+        },
+        Modal(id) -> {
+            if w.kids.len() >= 2 {
+                measure(w.kids[0], theme)
+                measure(w.kids[1], theme)
+                w.mw = w.kids[0].mw
+                w.mh = w.kids[0].mh
+            }
+        },
+    }
+    if w.wfix >= 0 {
+        w.mw = w.wfix
+    }
+    if w.hfix >= 0 {
+        w.mh = w.hfix
+    }
+    return
+}
+
+fun _gaps(spacing: Int, n: Int) -> Int {
+    if n > 1 {
+        return spacing * (n - 1)
+    }
+    return 0
+}
+
+// Place w into box, then recurse into children.
+fun arrange(w: Widget, box: Rect) {
+    w.box = box
+    match w.kind {
+        Column -> {
+            _arrange_column(w, box.inset(w.inset))
+        },
+        Row -> {
+            _arrange_row(w, box.inset(w.inset))
+        },
+        Panel -> {
+            if w.kids.len() > 0 {
+                arrange(w.kids[0], box.inset(w.inset))
+            }
+        },
+        Scroll(id) -> {
+            if w.kids.len() > 0 {
+                let child = w.kids[0]
+                let max_off = child.mh - box.h
+                if max_off < 0 {
+                    max_off = 0
+                }
+                let off = w.scroll
+                if off < 0 {
+                    off = 0
+                }
+                if off > max_off {
+                    off = max_off
+                }
+                w.scroll = off
+                arrange(child, Rect { x: box.x, y: box.y - off, w: box.w, h: child.mh })
+            }
+        },
+        Modal(id) -> {
+            if w.kids.len() >= 2 {
+                arrange(w.kids[0], box)
+                let dialog = w.kids[1]
+                let dw = dialog.mw
+                let dh = dialog.mh
+                let dx = box.x + (box.w - dw) / 2
+                let dy = box.y + (box.h - dh) / 2
+                arrange(dialog, Rect { x: dx, y: dy, w: dw, h: dh })
+            }
+        },
+        _ -> {},
+    }
+    return
+}
+
+fun _arrange_column(w: Widget, inner: Rect) {
+    let n = w.kids.len()
+    let content = 0
+    let flex_total = 0
+    let i = 0
+    while i < n {
+        let kid = w.kids[i]
+        if kid.flex == 0 {
+            content = content + kid.mh
+        } else {
+            flex_total = flex_total + kid.flex
+        }
+        i = i + 1
+    }
+    content = content + _gaps(w.spacing, n)
+    let leftover = inner.h - content
+    if leftover < 0 {
+        leftover = 0
+    }
+    let cursor = inner.y + _main_offset(w.main, leftover, flex_total)
+    let extra = _main_extra_gap(w.main, leftover, flex_total, n)
+    i = 0
+    while i < n {
+        let kid = w.kids[i]
+        let kh = kid.mh
+        if kid.flex > 0 {
+            kh = _share(leftover, kid.flex, flex_total)
+        }
+        let kw = _cross_size(w.cross, kid.wfix, kid.mw, inner.w)
+        let kx = inner.x + _cross_offset(w.cross, kw, inner.w)
+        arrange(kid, Rect { x: kx, y: cursor, w: kw, h: kh })
+        cursor = cursor + kh + w.spacing + extra
+        i = i + 1
+    }
+    return
+}
+
+fun _arrange_row(w: Widget, inner: Rect) {
+    let n = w.kids.len()
+    let content = 0
+    let flex_total = 0
+    let i = 0
+    while i < n {
+        let kid = w.kids[i]
+        if kid.flex == 0 {
+            content = content + kid.mw
+        } else {
+            flex_total = flex_total + kid.flex
+        }
+        i = i + 1
+    }
+    content = content + _gaps(w.spacing, n)
+    let leftover = inner.w - content
+    if leftover < 0 {
+        leftover = 0
+    }
+    let cursor = inner.x + _main_offset(w.main, leftover, flex_total)
+    let extra = _main_extra_gap(w.main, leftover, flex_total, n)
+    i = 0
+    while i < n {
+        let kid = w.kids[i]
+        let kw = kid.mw
+        if kid.flex > 0 {
+            kw = _share(leftover, kid.flex, flex_total)
+        }
+        let kh = _cross_size(w.cross, kid.hfix, kid.mh, inner.h)
+        let ky = inner.y + _cross_offset(w.cross, kh, inner.h)
+        arrange(kid, Rect { x: cursor, y: ky, w: kw, h: kh })
+        cursor = cursor + kw + w.spacing + extra
+        i = i + 1
+    }
+    return
+}
+
+fun _share(leftover: Int, weight: Int, total: Int) -> Int {
+    if total > 0 {
+        return leftover * weight / total
+    }
+    return 0
+}
+
+// Where the packed block of children starts along the main axis.
+fun _main_offset(j: Justify, leftover: Int, flex_total: Int) -> Int {
+    if flex_total > 0 {
+        return 0
+    }
+    match j {
+        Center -> {
+            return leftover / 2
+        },
+        End -> {
+            return leftover
+        },
+        _ -> {},
+    }
+    return 0
+}
+
+// Extra spacing added between children for space-between.
+fun _main_extra_gap(j: Justify, leftover: Int, flex_total: Int, n: Int) -> Int {
+    if flex_total > 0 {
+        return 0
+    }
+    match j {
+        Between -> {
+            if n > 1 {
+                return leftover / (n - 1)
+            }
+        },
+        _ -> {},
+    }
+    return 0
+}
+
+// A child's size on the cross axis: a fixed size wins, else stretch fills the
+// container and any other alignment uses the measured size.
+fun _cross_size(a: Align, fix: Int, measured: Int, inner_cross: Int) -> Int {
+    if fix >= 0 {
+        return fix
+    }
+    match a {
+        Stretch -> {
+            return inner_cross
+        },
+        _ -> {},
+    }
+    return measured
+}
+
+// A child's offset on the cross axis for its alignment.
+fun _cross_offset(a: Align, size: Int, inner_cross: Int) -> Int {
+    match a {
+        Center -> {
+            return (inner_cross - size) / 2
+        },
+        End -> {
+            return inner_cross - size
+        },
+        _ -> {},
+    }
+    return 0
+}

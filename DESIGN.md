@@ -55,8 +55,10 @@ user-facing extras (widgets) are their own subpath modules, imported directly as
 ```
 quill/
   lib.rv              core API: window/frame primitives, Color, Rect, Font,
-                      Text, Theme, Event, Step, App, run, Window
-  widget.rv           widgets + flex layout + paint + hit-test + render
+                      Text, Theme, Image, Event, Step, App, run, Window
+  widget.rv           widget tree: builders, modifiers, hit-test, queries
+  layout.rv           flex measure and arrange passes
+  paint.rv            draw a laid-out tree, plus render
   app.rv              widget runtime: UiApp, UiEvent, run_ui
   lib_test.rv  widget_test.rv
   backend/
@@ -74,9 +76,10 @@ quill/
   examples/hello.rv
 ```
 
-The dependency direction is one way (`app.rv` -> `widget.rv` -> `lib.rv` ->
-`backend/sys.rv`); Raven forbids import cycles, so shared types live in the lower
-module. Users import widgets from `quill/widget` and the runtime from `quill/app`.
+The dependency direction is one way (`app.rv` -> `paint.rv` -> `layout.rv` ->
+`widget.rv` -> `lib.rv` -> `backend/sys.rv`); Raven forbids import cycles, so
+shared types live in the lower module. Users import widgets from `quill/widget`
+and the runtime from `quill/app`.
 
 ## Layers
 
