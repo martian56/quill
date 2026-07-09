@@ -8,6 +8,8 @@ struct Model {
     draft: String,
     show_count: Bool,
     about_open: Bool,
+    dark: Bool,
+    font: Font,
     theme: Theme,
 }
 
@@ -26,7 +28,15 @@ fun showcase_init() -> Model {
     items.push("Self-contained, no system dependencies")
     items.push("Written entirely in Raven")
     items.push("This row is only reachable by scrolling")
-    return Model { items, draft: "", show_count: true, about_open: false, theme: Theme.dark(font) }
+    return Model {
+        items,
+        draft: "",
+        show_count: true,
+        about_open: false,
+        dark: true,
+        font,
+        theme: Theme.dark(font),
+    }
 }
 
 fun _remove_at(items: List<String>, idx: Int) -> List<String> {
@@ -55,6 +65,15 @@ fun _on_click(m: Model, id: String) -> Model {
     }
     if id == "show_count" {
         m.show_count = !m.show_count
+        return m
+    }
+    if id == "theme" {
+        m.dark = !m.dark
+        if m.dark {
+            m.theme = Theme.dark(m.font)
+        } else {
+            m.theme = Theme.light(m.font)
+        }
         return m
     }
     if id == "about" {
@@ -145,6 +164,7 @@ fun sidebar(m: Model) -> Widget {
                 label("text, input, keyboard").size(15).color(m.theme.muted),
                 label("scrolling and modals").size(15).color(m.theme.muted),
                 checkbox("show_count", m.show_count, "Show item count").size(16),
+                checkbox("theme", m.dark, "Dark theme").size(16),
                 button("about", "About").width(120),
             ],
         ).gap(12),

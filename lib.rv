@@ -123,6 +123,19 @@ impl Theme {
             on_accent: Color.rgb(245, 247, 252),
         }
     }
+
+    fun light(font: Font) -> Theme {
+        return Theme {
+            font,
+            bg: Color.rgb(244, 246, 249),
+            surface: Color.rgb(255, 255, 255),
+            field: Color.rgb(236, 239, 243),
+            text: Color.rgb(28, 32, 40),
+            muted: Color.rgb(110, 118, 130),
+            accent: Color.rgb(58, 118, 228),
+            on_accent: Color.rgb(255, 255, 255),
+        }
+    }
 }
 
 // A run of text to draw. Build it fluently: Text.new(font, "hi").at(x, y).size(n).
