@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -36,6 +36,24 @@ struct Color {
 impl Color {
     fun rgb(r: Int, g: Int, b: Int) -> Color {
         return Color { r, g, b }
+    }
+
+    // Move each channel pct percent toward white.
+    fun lighten(self, pct: Int) -> Color {
+        return Color {
+            r: self.r + (255 - self.r) * pct / 100,
+            g: self.g + (255 - self.g) * pct / 100,
+            b: self.b + (255 - self.b) * pct / 100,
+        }
+    }
+
+    // Move each channel pct percent toward black.
+    fun darken(self, pct: Int) -> Color {
+        return Color {
+            r: self.r - self.r * pct / 100,
+            g: self.g - self.g * pct / 100,
+            b: self.b - self.b * pct / 100,
+        }
     }
 }
 
@@ -278,4 +296,86 @@ fun run<M>(app: App<M>) -> Bool {
     close_window(win)
     backend_terminate()
     return true
+}
+
+// Bring the windowing backend up and down. Call start before opening any
+// Window, and stop after closing it. run does this for you; use these only when
+// driving your own loop with Window.
+fun start() -> Bool {
+    return backend_init()
+}
+
+fun stop() {
+    backend_terminate()
+    return
+}
+
+// An open window with a current GL context, for driving your own loop:
+//
+//     if !start() { return }
+//     let win = Window.open(WindowConfig.new())
+//     while !win.should_close() {
+//         let f = win.begin()
+//         f.clear(Color.rgb(20, 22, 28))
+//         win.present()
+//     }
+//     win.close()
+//     stop()
+struct Window {
+    handle: Int,
+}
+
+impl Window {
+    fun open(cfg: WindowConfig) -> Window {
+        return Window { handle: open_window(cfg.width, cfg.height, cfg.title) }
+    }
+
+    fun ok(self) -> Bool {
+        return self.handle != 0
+    }
+
+    fun should_close(self) -> Bool {
+        return window_should_close(self.handle)
+    }
+
+    fun width(self) -> Int {
+        return framebuffer_width(self.handle)
+    }
+
+    fun height(self) -> Int {
+        return framebuffer_height(self.handle)
+    }
+
+    fun mouse_x(self) -> Int {
+        return cursor_x(self.handle)
+    }
+
+    fun mouse_y(self) -> Int {
+        return cursor_y(self.handle)
+    }
+
+    fun mouse_down(self) -> Bool {
+        return mouse_down(self.handle)
+    }
+
+    // Start a frame, returning the surface to draw on.
+    fun begin(self) -> Frame {
+        let w = framebuffer_width(self.handle)
+        let h = framebuffer_height(self.handle)
+        frame_begin(w, h)
+        return Frame { width: w, height: h }
+    }
+
+    // Flush the frame, show it, and pump input.
+    fun present(self) {
+        frame_end()
+        swap_buffers(self.handle)
+        poll_events()
+        return
+    }
+
+    fun close(self) {
+        close_window(self.handle)
+        return
+    }
 }

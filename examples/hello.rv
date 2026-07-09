@@ -1,5 +1,5 @@
-import "../lib" { App, Event, Frame, Step, Font, Theme, WindowConfig, next, run }
-import "../widget" { Widget, column, row, panel, label, button, render }
+import "../lib" { Font, Theme, WindowConfig }
+import "../widget" { Widget, UiEvent, UiApp, column, row, panel, label, button, run_ui }
 
 struct Model {
     count: Int,
@@ -11,8 +11,24 @@ fun hello_init() -> Model {
     return Model { count: 0, theme: Theme.dark(font) }
 }
 
-fun hello_update(m: Model, e: Event) -> Step<Model> {
-    return next(m)
+fun _on_click(m: Model, id: String) -> Model {
+    if id == "inc" {
+        return Model { count: m.count + 1, theme: m.theme }
+    }
+    if id == "dec" {
+        return Model { count: m.count - 1, theme: m.theme }
+    }
+    if id == "reset" {
+        return Model { count: 0, theme: m.theme }
+    }
+    return m
+}
+
+fun hello_update(m: Model, e: UiEvent) -> Model {
+    return match e {
+        Click(id) -> _on_click(m, id),
+        Tick -> m,
+    }
 }
 
 fun counter_card(m: Model) -> Widget {
@@ -27,28 +43,29 @@ fun counter_card(m: Model) -> Widget {
     ).bg(m.theme.surface).rounded(16).pad(22)
 }
 
-fun hello_view(m: Model, f: Frame) {
-    render(
-        f,
-        m.theme,
-        column(
-            [
-                label("quill").size(38),
-                label("layout and widgets").size(17).color(m.theme.muted),
-                counter_card(m),
-                button("reset", "Reset").width(160),
-            ],
-        ).pad(28).gap(18),
-    )
+fun hello_view(m: Model) -> Widget {
+    return column(
+        [
+            label("quill").size(38),
+            label("click the buttons").size(17).color(m.theme.muted),
+            counter_card(m),
+            button("reset", "Reset").width(160),
+        ],
+    ).pad(28).gap(18)
+}
+
+fun hello_theme(m: Model) -> Theme {
+    return m.theme
 }
 
 fun hello_main() -> Bool {
-    let win = WindowConfig.new().size(960, 600).title("quill: widgets")
-    return run<Model>(
-        App {
+    let win = WindowConfig.new().size(960, 600).title("quill: counter")
+    return run_ui<Model>(
+        UiApp {
             init: hello_init,
             update: hello_update,
             view: hello_view,
+            theme: hello_theme,
             window: win,
         },
     )

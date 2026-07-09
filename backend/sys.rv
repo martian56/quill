@@ -13,6 +13,9 @@ extern "C" {
     fun q_window_close(win: Int)
     fun q_framebuffer_width(win: Int) -> Int
     fun q_framebuffer_height(win: Int) -> Int
+    fun q_cursor_x(win: Int) -> Int
+    fun q_cursor_y(win: Int) -> Int
+    fun q_mouse_down(win: Int) -> Int
     fun q_clear_rgb(r: Int, g: Int, b: Int)
     fun q_frame_begin(width: Int, height: Int)
     fun q_fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int)
@@ -68,6 +71,18 @@ fun framebuffer_width(win: Int) -> Int {
 
 fun framebuffer_height(win: Int) -> Int {
     return q_framebuffer_height(win)
+}
+
+fun cursor_x(win: Int) -> Int {
+    return q_cursor_x(win)
+}
+
+fun cursor_y(win: Int) -> Int {
+    return q_cursor_y(win)
+}
+
+fun mouse_down(win: Int) -> Bool {
+    return q_mouse_down(win) == 1
 }
 
 fun clear_rgb(r: Int, g: Int, b: Int) {

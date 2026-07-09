@@ -70,3 +70,29 @@ void q_clear_rgb(int64_t r, int64_t g, int64_t b) {
     glClearColor((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
+
+// Cursor position scaled from window coordinates to framebuffer pixels, so it
+// lines up with what the renderer draws under any display scaling.
+static double cursor_scaled(int64_t win, int axis) {
+    double cx, cy;
+    glfwGetCursorPos(WIN(win), &cx, &cy);
+    int ww, wh, fw, fh;
+    glfwGetWindowSize(WIN(win), &ww, &wh);
+    glfwGetFramebufferSize(WIN(win), &fw, &fh);
+    if (axis == 0) {
+        return ww > 0 ? cx * (double)fw / (double)ww : cx;
+    }
+    return wh > 0 ? cy * (double)fh / (double)wh : cy;
+}
+
+int64_t q_cursor_x(int64_t win) {
+    return (int64_t)cursor_scaled(win, 0);
+}
+
+int64_t q_cursor_y(int64_t win) {
+    return (int64_t)cursor_scaled(win, 1);
+}
+
+int64_t q_mouse_down(int64_t win) {
+    return glfwGetMouseButton(WIN(win), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS ? 1 : 0;
+}

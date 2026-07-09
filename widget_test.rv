@@ -1,6 +1,6 @@
-import std/test { assert_eq }
+import std/test { assert_eq, assert_true, assert_false }
 import "./lib" { Theme, Font, Rect }
-import "./widget" { Widget, column, row, measure, arrange }
+import "./widget" { Widget, column, row, button, measure, arrange, _hit }
 
 // A fixed-size leaf that needs no font, so layout is testable headlessly.
 fun fixed(w: Int, h: Int) -> Widget {
@@ -48,4 +48,25 @@ fun test_row_grow_fills_leftover() {
     assert_eq(a.box.w, 50)
     assert_eq(b.box.x, 60)
     assert_eq(b.box.w, 140)
+}
+
+fun test_hit_finds_button_by_box() {
+    let b = button("go", "Go")
+    b.box = Rect { x: 10, y: 10, w: 100, h: 40 }
+    match _hit(b, 50, 30) {
+        Some(id) -> {
+            assert_eq(id, "go")
+        },
+        None -> {
+            assert_true(false)
+        },
+    }
+    match _hit(b, 200, 200) {
+        Some(id) -> {
+            assert_false(true)
+        },
+        None -> {
+            assert_true(true)
+        },
+    }
 }

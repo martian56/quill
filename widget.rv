@@ -11,7 +11,7 @@
 //         ]).pad(24).gap(16))
 //     }
 
-import "./lib" { Frame, Rect, Color, Font, Text, Theme }
+import "./lib" { Frame, Rect, Color, Font, Text, Theme, Window, WindowConfig, start, stop }
 
 const BUTTON_PAD_X: Int = 16
 const BUTTON_PAD_Y: Int = 9
@@ -336,8 +336,35 @@ fun _paint_bg(w: Widget, f: Frame) {
     return
 }
 
-// Walk the laid-out tree and draw it.
-fun paint(w: Widget, f: Frame, theme: Theme) {
+// The mouse state paint reads for hover and press feedback. Build _inert() when
+// there is no interaction (a plain render).
+struct Pointer {
+    x: Int,
+    y: Int,
+    down: Bool,
+}
+
+fun _inert() -> Pointer {
+    return Pointer { x: -1, y: -1, down: false }
+}
+
+fun _contains(r: Rect, x: Int, y: Int) -> Bool {
+    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
+}
+
+fun _button_bg(w: Widget, theme: Theme, ptr: Pointer) -> Color {
+    let base = _fill_or(w, theme.accent)
+    if !_contains(w.box, ptr.x, ptr.y) {
+        return base
+    }
+    if ptr.down {
+        return base.darken(12)
+    }
+    return base.lighten(12)
+}
+
+// Walk the laid-out tree and draw it, applying pointer feedback to buttons.
+fun paint(w: Widget, f: Frame, theme: Theme, ptr: Pointer) {
     match w.kind {
         Label(text) -> {
             _paint_bg(w, f)
@@ -345,7 +372,7 @@ fun paint(w: Widget, f: Frame, theme: Theme) {
             f.text(Text.new(theme.font, text).at(w.box.x, w.box.y).size(w.tsize).color(col))
         },
         Button(id, text) -> {
-            let bgc = _fill_or(w, theme.accent)
+            let bgc = _button_bg(w, theme, ptr)
             f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, BUTTON_RADIUS, bgc)
             let tw = theme.font.width(w.tsize, text)
             let lh = theme.font.line_height(w.tsize)
@@ -358,12 +385,36 @@ fun paint(w: Widget, f: Frame, theme: Theme) {
             _paint_bg(w, f)
             let i = 0
             while i < w.kids.len() {
-                paint(w.kids[i], f, theme)
+                paint(w.kids[i], f, theme, ptr)
                 i = i + 1
             }
         },
     }
     return
+}
+
+// The id of the topmost button under (x, y), if any.
+fun _hit(w: Widget, x: Int, y: Int) -> String? {
+    let i = 0
+    while i < w.kids.len() {
+        let r = _hit(w.kids[i], x, y)
+        match r {
+            Some(id) -> {
+                return Some(id)
+            },
+            None -> {},
+        }
+        i = i + 1
+    }
+    match w.kind {
+        Button(id, text) -> {
+            if _contains(w.box, x, y) {
+                return Some(id)
+            }
+        },
+        _ -> {},
+    }
+    return None
 }
 
 fun _fill_or(w: Widget, fallback: Color) -> Color {
@@ -373,10 +424,115 @@ fun _fill_or(w: Widget, fallback: Color) -> Color {
     }
 }
 
-// Lay a tree out to fill the frame and paint it. Call this from a view.
+// Lay a tree out to fill the frame and paint it. Call this from a view when
+// driving the core loop yourself; run_ui handles interaction for you.
 fun render(f: Frame, theme: Theme, root: Widget) {
     measure(root, theme)
     arrange(root, Rect { x: 0, y: 0, w: f.width, h: f.height })
-    paint(root, f, theme)
+    paint(root, f, theme, _inert())
     return
+}
+
+// What a widget app's update reacts to. Click carries the id of the button
+// pressed and released over the same spot.
+enum UiEvent {
+    Tick,
+    Click(String),
+}
+
+// A widget application: view returns a tree, update folds events into the model,
+// and theme reads the palette from the model (it holds the loaded font).
+struct UiApp<M> {
+    init: fun() -> M,
+    update: fun(M, UiEvent) -> M,
+    view: fun(M) -> Widget,
+    theme: fun(M) -> Theme,
+    window: WindowConfig,
+}
+
+fun _layout(tree: Widget, theme: Theme, win: Window) {
+    measure(tree, theme)
+    arrange(tree, Rect { x: 0, y: 0, w: win.width(), h: win.height() })
+    return
+}
+
+// Open the window and run the widget app: poll the mouse, hit-test the laid-out
+// tree, dispatch Click and Tick into update, and paint each frame with hover and
+// press feedback. Returns false if the backend cannot start.
+fun run_ui<M>(app: UiApp<M>) -> Bool {
+    if !start() {
+        return false
+    }
+    let win = Window.open(app.window)
+    if !win.ok() {
+        stop()
+        return false
+    }
+
+    let init_fn = app.init
+    let update_fn = app.update
+    let view_fn = app.view
+    let theme_of = app.theme
+
+    let model = init_fn()
+    let last = view_fn(model)
+    _layout(last, theme_of(model), win)
+
+    let was_down = false
+    let pressed: String? = None
+    let running = true
+    while running {
+        if win.should_close() {
+            running = false
+        }
+        let mx = win.mouse_x()
+        let my = win.mouse_y()
+        let down = win.mouse_down()
+        if down && !was_down {
+            pressed = _hit(last, mx, my)
+        }
+        if was_down && !down {
+            let released = _hit(last, mx, my)
+            model = _dispatch_click(model, update_fn, pressed, released)
+            pressed = None
+        }
+        was_down = down
+
+        model = update_fn(model, UiEvent.Tick)
+
+        let theme = theme_of(model)
+        let tree = view_fn(model)
+        _layout(tree, theme, win)
+        let f = win.begin()
+        f.clear(theme.bg)
+        paint(tree, f, theme, Pointer { x: mx, y: my, down })
+        win.present()
+        last = tree
+    }
+
+    win.close()
+    stop()
+    return true
+}
+
+fun _dispatch_click<M>(
+    model: M,
+    update_fn: fun(M, UiEvent) -> M,
+    pressed: String?,
+    released: String?,
+) -> M {
+    match pressed {
+        Some(pid) -> {
+            match released {
+                Some(rid) -> {
+                    if pid == rid {
+                        return update_fn(model, UiEvent.Click(pid))
+                    }
+                },
+                None -> {},
+            }
+        },
+        None -> {},
+    }
+    return model
 }
