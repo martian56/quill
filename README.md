@@ -5,8 +5,6 @@ windows, a batched OpenGL renderer, and a declarative, themeable widget set. The
 backend (GLFW, OpenGL, fontstash, stb_image) is vendored and statically linked, so
 a quill app is a single executable with nothing to install and no DLL to ship.
 
-![A task tracker built with quill](assets/orbit.png)
-
 quill follows the same shape as [plumage](https://github.com/martian56/plumage),
 its terminal counterpart. You give it a model and three functions, and it owns the
 window, the event loop, and the drawing:
@@ -14,6 +12,14 @@ window, the event loop, and the drawing:
 - `init` builds the starting model.
 - `update` folds one event into the model. It is the only place state changes.
 - `view` returns the interface as a tree of widgets. It is a pure function of the model.
+
+## Built with quill
+
+Apps built with the toolkit. More will land here as we build them.
+
+**A task tracker** (dark theme, sidebar, grouped issue list):
+
+![A task tracker built with quill](assets/orbit.png)
 
 ## Install
 
