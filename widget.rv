@@ -22,6 +22,7 @@ const INPUT_PAD_X: Int = 12
 const INPUT_PAD_Y: Int = 9
 const INPUT_RADIUS: Int = 8
 const INPUT_MIN_W: Int = 160
+const CHECK_GAP: Int = 10
 
 // What a node is. Containers carry children; leaves carry their content. Button
 // and Input carry an id; Input also carries its current text.
@@ -33,6 +34,7 @@ enum WidgetKind {
     Label(String),
     Button(String, String),
     Input(String, String),
+    Checkbox(String, Bool, String),
 }
 
 // One node of the UI tree. Style is set with the chained modifiers below; mw/mh
@@ -113,6 +115,12 @@ fun input(id: String, value: String) -> Widget {
     return _leaf(WidgetKind.Input(id, value))
 }
 
+// A labelled checkbox. checked comes from the model; clicking it sends
+// UiEvent.Click(id), so update flips the flag.
+fun checkbox(id: String, checked: Bool, text: String) -> Widget {
+    return _leaf(WidgetKind.Checkbox(id, checked, text))
+}
+
 // Chained modifiers. Each mutates and returns the node, so they compose:
 // column([...]).pad(24).gap(16).bg(theme.surface).rounded(16).
 impl Widget {
@@ -187,6 +195,11 @@ fun measure(w: Widget, theme: Theme) {
                 w.mw = INPUT_MIN_W
             }
             w.mh = theme.font.line_height(w.tsize) + 2 * INPUT_PAD_Y
+        },
+        Checkbox(id, checked, text) -> {
+            let box = theme.font.line_height(w.tsize)
+            w.mw = box + CHECK_GAP + theme.font.width(w.tsize, text)
+            w.mh = box
         },
         Column -> {
             let total = 0
@@ -453,6 +466,9 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         Input(id, value) -> {
             _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on)
         },
+        Checkbox(id, checked, text) -> {
+            _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
+        },
         Scroll(id) -> {
             _paint_bg(w, f)
             f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
@@ -472,6 +488,25 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
             }
         },
     }
+    return
+}
+
+fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: String, hovered: Bool) {
+    let box = theme.font.line_height(w.tsize)
+    let bx = w.box.x
+    let by = w.box.y
+    let fill = theme.field
+    if checked {
+        fill = theme.accent
+    }
+    if hovered {
+        fill = fill.lighten(12)
+    }
+    f.rounded_rect(bx, by, box, box, 5, fill)
+    if checked {
+        f.text(Text.new(theme.font, "✓").at(bx + box / 6, by).size(w.tsize).color(theme.on_accent))
+    }
+    f.text(Text.new(theme.font, text).at(bx + box + CHECK_GAP, by).size(w.tsize).color(theme.text))
     return
 }
 
@@ -537,6 +572,11 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
         Input(id, value) -> {
             if _contains(w.box, x, y) {
                 return Some(Hit { id, input: true })
+            }
+        },
+        Checkbox(id, checked, text) -> {
+            if _contains(w.box, x, y) {
+                return Some(Hit { id, input: false })
             }
         },
         _ -> {},

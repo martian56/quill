@@ -1,11 +1,12 @@
 import "../lib" { Font, Color, Theme, WindowConfig }
-import "../widget" { Widget, column, row, panel, scroll, label, button, input }
+import "../widget" { Widget, column, row, panel, scroll, label, button, input, checkbox }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
 struct Model {
     items: List<String>,
     draft: String,
+    show_count: Bool,
     theme: Theme,
 }
 
@@ -24,7 +25,11 @@ fun showcase_init() -> Model {
     items.push("Self-contained, no system dependencies")
     items.push("Written entirely in Raven")
     items.push("This row is only reachable by scrolling")
-    return Model { items, draft: "", theme: Theme.dark(font) }
+    return Model { items, draft: "", show_count: true, theme: Theme.dark(font) }
+}
+
+fun _with(m: Model, items: List<String>, draft: String, show_count: Bool) -> Model {
+    return Model { items, draft, show_count, theme: m.theme }
 }
 
 fun _append(items: List<String>, s: String) -> List<String> {
@@ -55,12 +60,15 @@ fun _on_click(m: Model, id: String) -> Model {
         if m.draft == "" {
             return m
         }
-        return Model { items: _append(m.items, m.draft), draft: "", theme: m.theme }
+        return _with(m, _append(m.items, m.draft), "", m.show_count)
+    }
+    if id == "show_count" {
+        return _with(m, m.items, m.draft, !m.show_count)
     }
     if id.starts_with("del-") {
         match id.substring(4, id.length()).parse_int() {
             Some(idx) -> {
-                return Model { items: _remove_at(m.items, idx), draft: m.draft, theme: m.theme }
+                return _with(m, _remove_at(m.items, idx), m.draft, m.show_count)
             },
             None -> {},
         }
@@ -70,7 +78,7 @@ fun _on_click(m: Model, id: String) -> Model {
 
 fun _on_input(m: Model, id: String, s: String) -> Model {
     if id == "draft" {
-        return Model { items: m.items, draft: s, theme: m.theme }
+        return _with(m, m.items, s, m.show_count)
     }
     return m
 }
@@ -102,6 +110,13 @@ fun items_view(m: Model) -> Widget {
     return column(rows).gap(10)
 }
 
+fun footer(m: Model) -> Widget {
+    if m.show_count {
+        return label("${m.items.len()} item(s)").size(14).color(m.theme.muted)
+    }
+    return label("").size(14)
+}
+
 fun swatch(c: Color) -> Widget {
     return label("").bg(c).width(42).height(42).rounded(8)
 }
@@ -122,8 +137,9 @@ fun sidebar(m: Model) -> Widget {
                 ).gap(8),
                 label("flex layout").size(15).color(m.theme.muted),
                 label("text and text input").size(15).color(m.theme.muted),
-                label("rounded rectangles").size(15).color(m.theme.muted),
+                label("scrolling and clipping").size(15).color(m.theme.muted),
                 label("mouse and keyboard").size(15).color(m.theme.muted),
+                checkbox("show_count", m.show_count, "Show item count").size(16),
             ],
         ).gap(12),
     ).bg(m.theme.surface).rounded(16).pad(22).width(300)
@@ -139,7 +155,7 @@ fun showcase_view(m: Model) -> Widget {
                         12,
                     ),
                     scroll("items", items_view(m)).grow(1),
-                    label("${m.items.len()} item(s)").size(14).color(m.theme.muted),
+                    footer(m),
                 ],
             ).grow(1).gap(18),
             sidebar(m),
