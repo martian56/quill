@@ -1,6 +1,6 @@
 import std/test { assert_eq, assert_true, assert_false }
 import "./lib" { Theme, Font, Rect }
-import "./widget" { Widget, Align, Justify, column, row, button, measure, arrange, _hit, _drop_last }
+import "./widget" { Widget, Align, Justify, column, row, button, slider, measure, arrange, _hit, _drop_last, _slider_value_at }
 
 // A fixed-size leaf that needs no font, so layout is testable headlessly.
 fun fixed(w: Int, h: Int) -> Widget {
@@ -105,4 +105,34 @@ fun test_row_justify_between() {
     arrange(root, Rect { x: 0, y: 0, w: 200, h: 30 })
     assert_eq(a.box.x, 0)
     assert_eq(b.box.x, 150)
+}
+
+fun test_slider_value_at() {
+    let s = slider("s", 0, 0, 100)
+    // usable track = 218 - 2*9 = 200
+    s.box = Rect { x: 0, y: 0, w: 218, h: 24 }
+    match _slider_value_at(s, "s", 109) {
+        Some(v) -> {
+            assert_eq(v, 50)
+        },
+        None -> {
+            assert_true(false)
+        },
+    }
+    match _slider_value_at(s, "s", 0) {
+        Some(v) -> {
+            assert_eq(v, 0)
+        },
+        None -> {
+            assert_true(false)
+        },
+    }
+    match _slider_value_at(s, "s", 300) {
+        Some(v) -> {
+            assert_eq(v, 100)
+        },
+        None -> {
+            assert_true(false)
+        },
+    }
 }

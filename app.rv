@@ -17,7 +17,7 @@
 //     }
 
 import "./lib" { Theme, Rect, Window, WindowConfig, start, stop }
-import "./widget" { Widget, Interaction, measure, arrange, paint, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus }
+import "./widget" { Widget, Interaction, measure, arrange, paint, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at }
 import std/string
 import std/collections { Map, empty_map }
 
@@ -34,6 +34,7 @@ enum UiEvent {
     Click(String),
     Input(String, String),
     Submit(String),
+    Slide(String, Int),
 }
 
 // A widget application: view returns a tree, update folds events into the model,
@@ -79,6 +80,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
     let was_down = false
     let pressed: String? = None
     let focused: String? = None
+    let dragging: String? = None
     let running = true
     while running {
         win.wait(_idle_timeout(focused))
@@ -92,12 +94,19 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         if down && !was_down {
             match _hit(last, mx, my) {
                 Some(h) -> {
-                    if h.input {
-                        focused = Some(h.id)
+                    if h.drag {
+                        dragging = Some(h.id)
                         pressed = None
-                    } else {
-                        pressed = Some(h.id)
                         focused = None
+                        model = _apply_slide(model, update_fn, last, h.id, mx)
+                    } else {
+                        if h.input {
+                            focused = Some(h.id)
+                            pressed = None
+                        } else {
+                            pressed = Some(h.id)
+                            focused = None
+                        }
                     }
                 },
                 None -> {
@@ -106,9 +115,18 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
                 },
             }
         }
+        match dragging {
+            Some(sid) -> {
+                if down {
+                    model = _apply_slide(model, update_fn, last, sid, mx)
+                }
+            },
+            None -> {},
+        }
         if was_down && !down {
             model = _dispatch_click(model, update_fn, pressed, _hit_id(last, mx, my))
             pressed = None
+            dragging = None
         }
         was_down = down
 
@@ -180,6 +198,23 @@ fun _draw<M>(
     paint(tree, f, theme, Interaction { x: mx, y: my, down, focus: focused, caret_on })
     win.present()
     return tree
+}
+
+// Compute a slider's value from the cursor x and send a Slide event.
+fun _apply_slide<M>(
+    model: M,
+    update_fn: fun(M, UiEvent) -> M,
+    last: Widget,
+    id: String,
+    x: Int,
+) -> M {
+    match _slider_value_at(last, id, x) {
+        Some(v) -> {
+            return update_fn(model, UiEvent.Slide(id, v))
+        },
+        None -> {},
+    }
+    return model
 }
 
 // The id of a button under (x, y), ignoring inputs, for click release matching.

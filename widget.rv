@@ -23,6 +23,10 @@ const INPUT_PAD_Y: Int = 9
 const INPUT_RADIUS: Int = 8
 const INPUT_MIN_W: Int = 160
 const CHECK_GAP: Int = 10
+const SLIDER_W: Int = 200
+const SLIDER_H: Int = 24
+const SLIDER_TRACK: Int = 6
+const SLIDER_R: Int = 9
 
 // Cross-axis alignment of a container's children (align-items).
 enum Align {
@@ -52,6 +56,7 @@ enum WidgetKind {
     Button(String, String),
     Input(String, String),
     Checkbox(String, Bool, String),
+    Slider(String, Int, Int, Int),
     Modal(String),
 }
 
@@ -150,6 +155,12 @@ fun checkbox(id: String, checked: Bool, text: String) -> Widget {
     return _leaf(WidgetKind.Checkbox(id, checked, text))
 }
 
+// A horizontal slider from lo to hi. value comes from the model; dragging the
+// handle sends UiEvent.Slide(id, new_value).
+fun slider(id: String, value: Int, lo: Int, hi: Int) -> Widget {
+    return _leaf(WidgetKind.Slider(id, value, lo, hi))
+}
+
 // Chained modifiers. Each mutates and returns the node, so they compose:
 // column([...]).pad(24).gap(16).bg(theme.surface).rounded(16).
 impl Widget {
@@ -241,6 +252,10 @@ fun measure(w: Widget, theme: Theme) {
             let box = theme.font.line_height(w.tsize)
             w.mw = box + CHECK_GAP + theme.font.width(w.tsize, text)
             w.mh = box
+        },
+        Slider(id, value, lo, hi) -> {
+            w.mw = SLIDER_W
+            w.mh = SLIDER_H
         },
         Column -> {
             let total = 0
@@ -589,6 +604,9 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         Checkbox(id, checked, text) -> {
             _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
         },
+        Slider(id, value, lo, hi) -> {
+            _paint_slider(w, f, theme, value, lo, hi, _contains(w.box, it.x, it.y))
+        },
         Scroll(id) -> {
             _paint_bg(w, f)
             f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
@@ -637,6 +655,38 @@ fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: Stri
     return
 }
 
+// Handle-center x for a slider value, and the usable track width.
+fun _slider_fill(w: Widget, value: Int, lo: Int, hi: Int) -> Int {
+    let usable = w.box.w - 2 * SLIDER_R
+    let range = hi - lo
+    if range <= 0 {
+        return 0
+    }
+    let t = (value - lo) * usable / range
+    if t < 0 {
+        return 0
+    }
+    if t > usable {
+        return usable
+    }
+    return t
+}
+
+fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: Int, lo: Int, hi: Int, hovered: Bool) {
+    let cy = w.box.y + w.box.h / 2
+    let ty = cy - SLIDER_TRACK / 2
+    let x0 = w.box.x + SLIDER_R
+    f.rounded_rect(x0, ty, w.box.w - 2 * SLIDER_R, SLIDER_TRACK, SLIDER_TRACK / 2, theme.field)
+    let fill = _slider_fill(w, value, lo, hi)
+    f.rounded_rect(x0, ty, fill, SLIDER_TRACK, SLIDER_TRACK / 2, theme.accent)
+    let hc = theme.accent
+    if hovered {
+        hc = theme.accent.lighten(14)
+    }
+    f.rounded_rect(x0 + fill - SLIDER_R, cy - SLIDER_R, 2 * SLIDER_R, 2 * SLIDER_R, SLIDER_R, hc)
+    return
+}
+
 fun _paint_input(w: Widget, f: Frame, theme: Theme, value: String, focused: Bool, caret_on: Bool) {
     let border = theme.field
     if focused {
@@ -662,10 +712,12 @@ fun _paint_input(w: Widget, f: Frame, theme: Theme, value: String, focused: Bool
     return
 }
 
-// A hit-tested target: an interactive widget's id and whether it is an input.
+// A hit-tested target: an interactive widget's id, whether it is a text input,
+// and whether it is dragged (a slider) rather than clicked.
 struct Hit {
     id: String,
     input: Bool,
+    drag: Bool,
 }
 
 // The topmost interactive widget under (x, y), if any.
@@ -697,17 +749,22 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
     match w.kind {
         Button(id, text) -> {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: false })
+                return Some(Hit { id, input: false, drag: false })
             }
         },
         Input(id, value) -> {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: true })
+                return Some(Hit { id, input: true, drag: false })
             }
         },
         Checkbox(id, checked, text) -> {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: false })
+                return Some(Hit { id, input: false, drag: false })
+            }
+        },
+        Slider(id, value, lo, hi) -> {
+            if _contains(w.box, x, y) {
+                return Some(Hit { id, input: false, drag: true })
             }
         },
         _ -> {},
@@ -830,7 +887,41 @@ fun _hit_modal(w: Widget, id: String, x: Int, y: Int) -> Hit? {
         }
     }
     if _contains(w.box, x, y) {
-        return Some(Hit { id, input: false })
+        return Some(Hit { id, input: false, drag: false })
+    }
+    return None
+}
+
+// The slider value for a cursor x, if the slider with this id is in the tree.
+fun _slider_value_at(w: Widget, id: String, x: Int) -> Int? {
+    match w.kind {
+        Slider(sid, value, lo, hi) -> {
+            if sid == id {
+                let usable = w.box.w - 2 * SLIDER_R
+                if usable <= 0 {
+                    return Some(lo)
+                }
+                let rel = x - w.box.x - SLIDER_R
+                if rel < 0 {
+                    rel = 0
+                }
+                if rel > usable {
+                    rel = usable
+                }
+                return Some(lo + (rel * (hi - lo) + usable / 2) / usable)
+            }
+        },
+        _ -> {},
+    }
+    let i = 0
+    while i < w.kids.len() {
+        match _slider_value_at(w.kids[i], id, x) {
+            Some(v) -> {
+                return Some(v)
+            },
+            None -> {},
+        }
+        i = i + 1
     }
     return None
 }

@@ -1,5 +1,5 @@
 import "../lib" { Font, Color, Theme, WindowConfig }
-import "../widget" { Widget, Justify, column, row, panel, scroll, modal, label, button, input, checkbox }
+import "../widget" { Widget, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, slider }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -9,6 +9,7 @@ struct Model {
     show_count: Bool,
     about_open: Bool,
     dark: Bool,
+    item_size: Int,
     font: Font,
     theme: Theme,
 }
@@ -34,6 +35,7 @@ fun showcase_init() -> Model {
         show_count: true,
         about_open: false,
         dark: true,
+        item_size: 18,
         font,
         theme: Theme.dark(font),
     }
@@ -107,18 +109,28 @@ fun _on_input(m: Model, id: String, s: String) -> Model {
     return m
 }
 
+fun _on_slide(m: Model, id: String, v: Int) -> Model {
+    if id == "item_size" {
+        m.item_size = v
+    }
+    return m
+}
+
 fun showcase_update(m: Model, e: UiEvent) -> Model {
     return match e {
         Click(id) -> _on_click(m, id),
         Input(id, s) -> _on_input(m, id, s),
         Submit(id) -> _add(m),
+        Slide(id, v) -> _on_slide(m, id, v),
         Tick -> m,
     }
 }
 
 fun item_row(m: Model, text: String, i: Int) -> Widget {
     return panel(
-        row([label(text).size(18).grow(1), button("del-${i}", "Delete").width(110)]).gap(12),
+        row([label(text).size(m.item_size).grow(1), button("del-${i}", "Delete").width(110)]).gap(
+            12,
+        ),
     ).bg(m.theme.surface).rounded(12).pad(14)
 }
 
@@ -165,6 +177,8 @@ fun sidebar(m: Model) -> Widget {
                 label("scrolling and modals").size(15).color(m.theme.muted),
                 checkbox("show_count", m.show_count, "Show item count").size(16),
                 checkbox("theme", m.dark, "Dark theme").size(16),
+                label("Text size: ${m.item_size}").size(15).color(m.theme.muted),
+                slider("item_size", m.item_size, 14, 30),
                 button("about", "About").width(120),
             ],
         ).gap(12),
