@@ -24,6 +24,23 @@ const INPUT_RADIUS: Int = 8
 const INPUT_MIN_W: Int = 160
 const CHECK_GAP: Int = 10
 
+// Cross-axis alignment of a container's children (align-items).
+enum Align {
+    Start,
+    Center,
+    End,
+    Stretch,
+}
+
+// Main-axis distribution of a container's children (justify-content). Only
+// applies when there is leftover space, so it is ignored once a child grows.
+enum Justify {
+    Start,
+    Center,
+    End,
+    Between,
+}
+
 // What a node is. Containers carry children; leaves carry their content. Button
 // and Input carry an id; Input also carries its current text.
 enum WidgetKind {
@@ -51,6 +68,8 @@ struct Widget {
     hfix: Int,
     tsize: Int,
     tint: Color?,
+    cross: Align,
+    main: Justify,
     mw: Int,
     mh: Int,
     box: Rect,
@@ -70,6 +89,8 @@ fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
         hfix: -1,
         tsize: 16,
         tint: None,
+        cross: Align.Stretch,
+        main: Justify.Start,
         mw: 0,
         mh: 0,
         box: Rect { x: 0, y: 0, w: 0, h: 0 },
@@ -166,6 +187,18 @@ impl Widget {
 
     fun color(self, c: Color) -> Widget {
         self.tint = Some(c)
+        return self
+    }
+
+    // Cross-axis alignment of this container's children.
+    fun align(self, a: Align) -> Widget {
+        self.cross = a
+        return self
+    }
+
+    // Main-axis distribution of this container's children.
+    fun justify(self, j: Justify) -> Widget {
+        self.main = j
         return self
     }
 }
@@ -312,24 +345,25 @@ fun arrange(w: Widget, box: Rect) {
 
 fun _arrange_column(w: Widget, inner: Rect) {
     let n = w.kids.len()
-    let fixed = 0
+    let content = 0
     let flex_total = 0
     let i = 0
     while i < n {
         let kid = w.kids[i]
         if kid.flex == 0 {
-            fixed = fixed + kid.mh
+            content = content + kid.mh
         } else {
             flex_total = flex_total + kid.flex
         }
         i = i + 1
     }
-    fixed = fixed + _gaps(w.spacing, n)
-    let leftover = inner.h - fixed
+    content = content + _gaps(w.spacing, n)
+    let leftover = inner.h - content
     if leftover < 0 {
         leftover = 0
     }
-    let cursor = inner.y
+    let cursor = inner.y + _main_offset(w.main, leftover, flex_total)
+    let extra = _main_extra_gap(w.main, leftover, flex_total, n)
     i = 0
     while i < n {
         let kid = w.kids[i]
@@ -337,12 +371,10 @@ fun _arrange_column(w: Widget, inner: Rect) {
         if kid.flex > 0 {
             kh = _share(leftover, kid.flex, flex_total)
         }
-        let kw = inner.w
-        if kid.wfix >= 0 {
-            kw = kid.wfix
-        }
-        arrange(kid, Rect { x: inner.x, y: cursor, w: kw, h: kh })
-        cursor = cursor + kh + w.spacing
+        let kw = _cross_size(w.cross, kid.wfix, kid.mw, inner.w)
+        let kx = inner.x + _cross_offset(w.cross, kw, inner.w)
+        arrange(kid, Rect { x: kx, y: cursor, w: kw, h: kh })
+        cursor = cursor + kh + w.spacing + extra
         i = i + 1
     }
     return
@@ -350,24 +382,25 @@ fun _arrange_column(w: Widget, inner: Rect) {
 
 fun _arrange_row(w: Widget, inner: Rect) {
     let n = w.kids.len()
-    let fixed = 0
+    let content = 0
     let flex_total = 0
     let i = 0
     while i < n {
         let kid = w.kids[i]
         if kid.flex == 0 {
-            fixed = fixed + kid.mw
+            content = content + kid.mw
         } else {
             flex_total = flex_total + kid.flex
         }
         i = i + 1
     }
-    fixed = fixed + _gaps(w.spacing, n)
-    let leftover = inner.w - fixed
+    content = content + _gaps(w.spacing, n)
+    let leftover = inner.w - content
     if leftover < 0 {
         leftover = 0
     }
-    let cursor = inner.x
+    let cursor = inner.x + _main_offset(w.main, leftover, flex_total)
+    let extra = _main_extra_gap(w.main, leftover, flex_total, n)
     i = 0
     while i < n {
         let kid = w.kids[i]
@@ -375,12 +408,10 @@ fun _arrange_row(w: Widget, inner: Rect) {
         if kid.flex > 0 {
             kw = _share(leftover, kid.flex, flex_total)
         }
-        let kh = inner.h
-        if kid.hfix >= 0 {
-            kh = kid.hfix
-        }
-        arrange(kid, Rect { x: cursor, y: inner.y, w: kw, h: kh })
-        cursor = cursor + kw + w.spacing
+        let kh = _cross_size(w.cross, kid.hfix, kid.mh, inner.h)
+        let ky = inner.y + _cross_offset(w.cross, kh, inner.h)
+        arrange(kid, Rect { x: cursor, y: ky, w: kw, h: kh })
+        cursor = cursor + kw + w.spacing + extra
         i = i + 1
     }
     return
@@ -389,6 +420,68 @@ fun _arrange_row(w: Widget, inner: Rect) {
 fun _share(leftover: Int, weight: Int, total: Int) -> Int {
     if total > 0 {
         return leftover * weight / total
+    }
+    return 0
+}
+
+// Where the packed block of children starts along the main axis.
+fun _main_offset(j: Justify, leftover: Int, flex_total: Int) -> Int {
+    if flex_total > 0 {
+        return 0
+    }
+    match j {
+        Center -> {
+            return leftover / 2
+        },
+        End -> {
+            return leftover
+        },
+        _ -> {},
+    }
+    return 0
+}
+
+// Extra spacing added between children for space-between.
+fun _main_extra_gap(j: Justify, leftover: Int, flex_total: Int, n: Int) -> Int {
+    if flex_total > 0 {
+        return 0
+    }
+    match j {
+        Between -> {
+            if n > 1 {
+                return leftover / (n - 1)
+            }
+        },
+        _ -> {},
+    }
+    return 0
+}
+
+// A child's size on the cross axis: a fixed size wins, else stretch fills the
+// container and any other alignment uses the measured size.
+fun _cross_size(a: Align, fix: Int, measured: Int, inner_cross: Int) -> Int {
+    if fix >= 0 {
+        return fix
+    }
+    match a {
+        Stretch -> {
+            return inner_cross
+        },
+        _ -> {},
+    }
+    return measured
+}
+
+// A child's offset on the cross axis for its alignment.
+fun _cross_offset(a: Align, size: Int, inner_cross: Int) -> Int {
+    match a {
+        Center -> {
+            return (inner_cross - size) / 2
+        },
+        End -> {
+            return inner_cross - size
+        },
+        _ -> {},
     }
     return 0
 }
