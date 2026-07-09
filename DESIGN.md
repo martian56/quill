@@ -82,8 +82,8 @@ small C interface so it can be swapped.
 | L0 C backend | `c/*.c` | window, input, GPU renderer, text; the flat `q_*` C interface |
 | L1 bindings | `backend/sys.rv` | `extern "C"` decls + string/handle marshaling |
 | L2 paint | `Frame` in `lib.rv`, `c/render.c`, `c/text.c` | typed drawing: `clear`, `rect`, `rounded_rect`, `clip`/`unclip`, `text` |
-| L3 layout | `layout.rv` | flexbox-style `Row`/`Column`/`Stack`, padding, gap, align, grow; measure + arrange |
-| L4 widgets | `widgets/` | `label`, `button`, `text_input`, `panel`, `row`/`column`, `scroll`, checkbox/slider |
+| L3 layout | `widget.rv` | flex measure/arrange: `row`/`column`/`panel`, padding, gap, grow, fixed vs stretch |
+| L4 widgets | `widget.rv` (later `widgets/`) | `label`, `button`, `panel`, then `text_input`, `scroll`, checkbox/slider; imported from `quill/widget` |
 | L5 app | `lib.rv` | the loop: `App<M>{ init, update, view }`; `run` owns window + loop + draw |
 | L6 theme | `theme.rv` | design tokens (palette, spacing/radius scale, type), light + dark |
 
@@ -178,8 +178,10 @@ styling work.
    solid rects, SDF rounded rects, and scissor clipping, plus fontstash text
    (`c/text.c`) with a bundled font and width measurement. `Frame` exposes
    `rect`, `rounded_rect`, `clip`/`unclip`, and `text`.
-3. **Layout + first widgets.** The flex layout engine, plus `label`, `button`,
-   `panel`, `row`/`column`. The counter example renders.
+3. **Layout + first widgets.** DONE. A retained widget tree (`widget.rv`) with a
+   flex measure/arrange pass and `label`, `button`, `panel`, `row`, `column`
+   plus chained modifiers; `render` paints a tree onto a Frame. The counter
+   example renders and layout is unit-tested.
 4. **Events + input.** Hit-testing, hover/press/click dispatch, `text_input`
    with a caret, focus, keyboard (polled from GLFW state). The counter example
    is interactive.
