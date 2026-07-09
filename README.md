@@ -51,10 +51,12 @@ fun main() {
 }
 ```
 
-Widgets (`label`, `button`, `panel`, `input`, `row`, `column`) compose with
-chained modifiers (`pad`, `gap`, `grow`, `bg`, `rounded`, `width`, `size`,
-`color`). `run_ui` owns the window: it lays the tree out with a flex pass, paints
-it, and routes clicks and typing back into `update`.
+Widgets (`label`, `button`, `panel`, `row`, `column`, `scroll`, `input`,
+`textarea`, `checkbox`, `radio`, `slider`, `dropdown`, `tabs`, `image`,
+`divider`, `modal`) compose with chained modifiers (`pad`, `gap`, `grow`, `bg`,
+`rounded`, `width`, `height`, `size`, `color`, `align`, `justify`, `disabled`,
+`tip`). `run_ui` owns the window: it lays the tree out with a flex pass, paints
+it, and routes clicks, scrolling, and typing back into `update`.
 
 The backend is self-contained: GLFW, a small OpenGL 3.3 renderer, and fontstash
 are vendored and statically linked, so there is nothing to install and no DLL to
@@ -68,7 +70,9 @@ rvpm run -- hello
 
 ## Status
 
-Early development. Milestones 1 to 4 are done: a window, a batched renderer
-(rectangles, rounded rectangles, text, clipping), a flex layout with widgets, and
-mouse plus keyboard interaction. Next is theme polish and a scroll container
-toward `v0.1.0`. See `DESIGN.md`.
+All five milestones are done: a window, a batched OpenGL renderer (rectangles,
+rounded rectangles, text, images, clipping), a flex layout with alignment, the
+full widget set above, and mouse plus keyboard interaction, an event-driven idle
+loop (zero CPU when static), light and dark themes with runtime switching, hover
+tooltips, caret editing with mouse text selection, a wrapping multi-line text
+area, cursor shapes, and clipboard. See `DESIGN.md`.
