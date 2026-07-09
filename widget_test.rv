@@ -2,6 +2,7 @@ import std/test { assert_eq, assert_true, assert_false }
 import "./lib" { Theme, Font, Rect }
 import "./widget" { Widget, Align, Justify, column, row, button, label, slider, _hit, _drop_last, _slider_value_at, _tip_at }
 import "./layout" { measure, arrange }
+import "./paint" { VLine, caret_line }
 
 // A fixed-size leaf that needs no font, so layout is testable headlessly.
 fun fixed(w: Int, h: Int) -> Widget {
@@ -133,6 +134,22 @@ fun test_tip_at_finds_tipped_widget() {
             assert_true(true)
         },
     }
+}
+
+fun test_caret_line_maps_offset_to_row() {
+    // Two words wrapped at a space: the space byte (5) is consumed, so the second
+    // line starts at 6.
+    let gap: List<VLine> = [VLine { start: 0, end: 5 }, VLine { start: 6, end: 10 }]
+    assert_eq(caret_line(gap, 0), 0)
+    assert_eq(caret_line(gap, 3), 0)
+    // At the end of the first line, before the consumed space, stays on line 0.
+    assert_eq(caret_line(gap, 5), 0)
+    assert_eq(caret_line(gap, 6), 1)
+    assert_eq(caret_line(gap, 10), 1)
+    // A hard wrap has no consumed byte, so the boundary offset belongs to the
+    // start of the next visual line.
+    let hard: List<VLine> = [VLine { start: 0, end: 4 }, VLine { start: 4, end: 8 }]
+    assert_eq(caret_line(hard, 4), 1)
 }
 
 fun test_slider_value_at() {

@@ -16,6 +16,8 @@ const SLIDER_H: Int = 24
 const DD_PAD_X: Int = 12
 const DD_PAD_Y: Int = 8
 const DD_ARROW: Int = 22
+const TA_PAD: Int = 10
+const TA_ROWS: Int = 5
 
 // Fill each child's desired size (mw, mh), bottom up.
 fun measure(w: Widget, theme: Theme) {
@@ -35,6 +37,10 @@ fun measure(w: Widget, theme: Theme) {
                 w.mw = INPUT_MIN_W
             }
             w.mh = theme.font.line_height(w.tsize) + 2 * INPUT_PAD_Y
+        },
+        TextArea(id, value) -> {
+            w.mw = INPUT_MIN_W
+            w.mh = TA_ROWS * theme.font.line_height(w.tsize) + 2 * TA_PAD
         },
         Checkbox(id, checked, text) -> {
             let box = theme.font.line_height(w.tsize)

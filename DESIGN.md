@@ -199,11 +199,11 @@ styling work.
    The counter and a text field are interactive.
 5. **Theme + polish.** Done: an event-driven idle loop (zero CPU when static),
    `scroll`, `checkbox`, `radio`, `slider` (drag), `dropdown` (a portal menu),
-   `modal` dialogs, `image`, `divider`, `tabs`, hover tooltips, disabled states,
-   focus rings, layout alignment, keyboard navigation, caret editing, clipboard,
-   cursor shapes, and light/dark themes with runtime switching. The interaction,
-   layout, and widget models are complete. Remaining, niche: mouse text selection
-   and multiline text. (DPI is handled by GLFW: native-resolution framebuffer,
+   `modal` dialogs, `image`, `divider`, `tabs`, a wrapping multi-line `textarea`,
+   hover tooltips, disabled states, focus rings, layout alignment, keyboard
+   navigation, caret editing, mouse text selection, clipboard, cursor shapes, and
+   light/dark themes with runtime switching. The interaction, layout, and widget
+   models are complete. (DPI is handled by GLFW: native-resolution framebuffer,
    cursor scaled to match.)
 
 ## Testing

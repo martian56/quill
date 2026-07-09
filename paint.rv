@@ -20,6 +20,8 @@ const TIP_SIZE: Int = 14
 const TIP_PAD_X: Int = 10
 const TIP_PAD_Y: Int = 6
 const TIP_GAP: Int = 8
+const TA_PAD: Int = 10
+const TA_TRAIL: Int = 6
 
 // The interaction state paint reads for hover, press, and focus feedback. Build
 // _inert() when there is no interaction (a plain render).
@@ -31,6 +33,7 @@ struct Interaction {
     caret_on: Bool,
     caret_pos: Int,
     sel_anchor: Int,
+    ta_top: Int,
 }
 
 fun _inert() -> Interaction {
@@ -42,6 +45,7 @@ fun _inert() -> Interaction {
         caret_on: true,
         caret_pos: 0,
         sel_anchor: 0,
+        ta_top: 0,
     }
 }
 
@@ -127,6 +131,19 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
                 it.caret_on,
                 it.caret_pos,
                 it.sel_anchor,
+            )
+        },
+        TextArea(id, value) -> {
+            _paint_textarea(
+                w,
+                f,
+                theme,
+                value,
+                _is_focused(it, id),
+                it.caret_on,
+                it.caret_pos,
+                it.sel_anchor,
+                it.ta_top,
             )
         },
         Checkbox(id, checked, text) -> {
@@ -356,6 +373,307 @@ fun _next_boundary(s: String, i: Int) -> Int {
         }
     }
     return c
+}
+
+// One displayed row of a text area: a byte range [start, end) of the value.
+struct VLine {
+    start: Int,
+    end: Int,
+}
+
+// Wrap value into visual lines that fit inner_w, breaking at spaces and hard
+// breaking any word wider than the box; an explicit newline always starts a new
+// line. The result always has at least one line, so an empty area has a caret row.
+fun wrap_area(theme: Theme, size: Int, inner_w: Int, value: String) -> List<VLine> {
+    let lines: List<VLine> = []
+    let n = value.length()
+    let para_start = 0
+    let i = 0
+    while i <= n {
+        let is_nl = i < n && value.byte_at(i) == 10
+        if i == n || is_nl {
+            _wrap_paragraph(theme, size, inner_w, value, para_start, i, lines)
+            para_start = i + 1
+        }
+        i = i + 1
+    }
+    return lines
+}
+
+fun _wrap_paragraph(
+    theme: Theme,
+    size: Int,
+    inner_w: Int,
+    value: String,
+    start: Int,
+    end: Int,
+    out: List<VLine>,
+) {
+    if end <= start {
+        out.push(VLine { start, end: start })
+        return
+    }
+    let line_start = start
+    let last_space = -1
+    let i = start
+    while i < end {
+        let nx = _next_boundary(value, i)
+        let over = theme.font.width(size, value.substring(line_start, nx)) > inner_w && i > line_start
+        if over {
+            if last_space >= line_start {
+                out.push(VLine { start: line_start, end: last_space })
+                line_start = last_space + 1
+                last_space = -1
+                i = line_start
+            } else {
+                out.push(VLine { start: line_start, end: i })
+                line_start = i
+                last_space = -1
+            }
+        } else {
+            if value.byte_at(i) == 32 {
+                last_space = i
+            }
+            i = nx
+        }
+    }
+    out.push(VLine { start: line_start, end })
+    return
+}
+
+// The visual line index the caret at byte offset sits on. At a wrap boundary the
+// caret shows at the start of the following line.
+fun caret_line(lines: List<VLine>, caret: Int) -> Int {
+    let i = 0
+    while i < lines.len() {
+        let ln = lines[i]
+        if caret >= ln.start && caret < ln.end {
+            return i
+        }
+        if caret == ln.end {
+            if i + 1 >= lines.len() {
+                return i
+            }
+            if lines[i + 1].start > ln.end {
+                return i
+            }
+        }
+        i = i + 1
+    }
+    if lines.len() > 0 {
+        return lines.len() - 1
+    }
+    return 0
+}
+
+// How many wrapped rows fit in a text area's box.
+fun textarea_rows(w: Widget, theme: Theme) -> Int {
+    let lh = theme.font.line_height(w.tsize)
+    if lh <= 0 {
+        return 1
+    }
+    let rows = (w.box.h - 2 * TA_PAD) / lh
+    if rows < 1 {
+        return 1
+    }
+    return rows
+}
+
+// The wrapped lines of a text area at its current width.
+fun textarea_lines(w: Widget, theme: Theme) -> List<VLine> {
+    match w.kind {
+        TextArea(id, value) -> {
+            return wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
+        },
+        _ -> {},
+    }
+    let empty: List<VLine> = []
+    return empty
+}
+
+// Byte offset in [ln.start, ln.end] whose left edge is nearest px, measured from
+// the line's left.
+fun _offset_in_line(ln: VLine, value: String, theme: Theme, size: Int, px: Int) -> Int {
+    if px <= 0 {
+        return ln.start
+    }
+    let i = ln.start
+    let prev = 0
+    while i < ln.end {
+        let nx = _next_boundary(value, i)
+        let cw = theme.font.width(size, value.substring(ln.start, nx))
+        if px < (prev + cw) / 2 {
+            return i
+        }
+        prev = cw
+        i = nx
+    }
+    return ln.end
+}
+
+// The caret byte offset for a click at (x, y) in a text area shown from top_line.
+fun textarea_caret_at(w: Widget, theme: Theme, x: Int, y: Int, top_line: Int) -> Int {
+    return match w.kind {
+        TextArea(id, value) -> _ta_caret(w, theme, value, x, y, top_line),
+        _ -> 0,
+    }
+}
+
+fun _ta_caret(w: Widget, theme: Theme, value: String, x: Int, y: Int, top_line: Int) -> Int {
+    let lines = wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
+    if lines.len() == 0 {
+        return 0
+    }
+    let lh = theme.font.line_height(w.tsize)
+    let li = top_line + (y - w.box.y - TA_PAD) / lh
+    if li < 0 {
+        li = 0
+    }
+    if li >= lines.len() {
+        li = lines.len() - 1
+    }
+    return _offset_in_line(lines[li], value, theme, w.tsize, x - w.box.x - TA_PAD)
+}
+
+// Move the caret one visual row up (dir -1) or down (dir +1), keeping its column.
+fun textarea_move_v(w: Widget, theme: Theme, caret: Int, dir: Int) -> Int {
+    return match w.kind {
+        TextArea(id, value) -> _ta_move_v(w, theme, value, caret, dir),
+        _ -> caret,
+    }
+}
+
+fun _ta_move_v(w: Widget, theme: Theme, value: String, caret: Int, dir: Int) -> Int {
+    let lines = wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
+    if lines.len() == 0 {
+        return caret
+    }
+    let cl = caret_line(lines, caret)
+    let target = cl + dir
+    if target < 0 {
+        return 0
+    }
+    if target >= lines.len() {
+        return value.length()
+    }
+    let cur = lines[cl]
+    let px = theme.font.width(w.tsize, value.substring(cur.start, caret))
+    return _offset_in_line(lines[target], value, theme, w.tsize, px)
+}
+
+// The start / end byte offset of the visual line the caret sits on.
+fun textarea_home(w: Widget, theme: Theme, caret: Int) -> Int {
+    return match w.kind {
+        TextArea(id, value) -> _ta_edge(w, theme, value, caret, false),
+        _ -> caret,
+    }
+}
+
+fun textarea_end(w: Widget, theme: Theme, caret: Int) -> Int {
+    return match w.kind {
+        TextArea(id, value) -> _ta_edge(w, theme, value, caret, true),
+        _ -> caret,
+    }
+}
+
+fun _ta_edge(w: Widget, theme: Theme, value: String, caret: Int, end_edge: Bool) -> Int {
+    let lines = wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
+    if lines.len() == 0 {
+        return caret
+    }
+    let cl = caret_line(lines, caret)
+    if end_edge {
+        return lines[cl].end
+    }
+    return lines[cl].start
+}
+
+fun _min(a: Int, b: Int) -> Int {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+fun _max(a: Int, b: Int) -> Int {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+fun _paint_textarea(
+    w: Widget,
+    f: Frame,
+    theme: Theme,
+    value: String,
+    focused: Bool,
+    caret_on: Bool,
+    caret_pos: Int,
+    sel_anchor: Int,
+    top_line: Int,
+) {
+    let border = theme.field
+    if focused {
+        border = theme.accent
+    }
+    f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, INPUT_RADIUS, border)
+    f.rounded_rect(
+        w.box.x + 2,
+        w.box.y + 2,
+        w.box.w - 4,
+        w.box.h - 4,
+        INPUT_RADIUS - 1,
+        theme.field,
+    )
+    let lines = wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
+    let lh = theme.font.line_height(w.tsize)
+    let rows = textarea_rows(w, theme)
+    let tx = w.box.x + TA_PAD
+    let y0 = w.box.y + TA_PAD
+    let cp = _clamp(caret_pos, value.length())
+    let an = _clamp(sel_anchor, value.length())
+    let lo = _min(cp, an)
+    let hi = _max(cp, an)
+    let has_sel = focused && lo != hi
+    let ccl = caret_line(lines, cp)
+    f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
+    let r = 0
+    while r < rows {
+        let li = top_line + r
+        if li >= 0 && li < lines.len() {
+            let ln = lines[li]
+            let ly = y0 + r * lh
+            if has_sel && lo <= ln.end && hi >= ln.start {
+                let a = lo
+                if a < ln.start {
+                    a = ln.start
+                }
+                let b = hi
+                if b > ln.end {
+                    b = ln.end
+                }
+                let ax = tx + theme.font.width(w.tsize, value.substring(ln.start, a))
+                let bx = tx + theme.font.width(w.tsize, value.substring(ln.start, b))
+                if hi > ln.end {
+                    bx = bx + TA_TRAIL
+                }
+                f.rect_alpha(ax, ly, bx - ax, lh, theme.accent, 110)
+            }
+            f.text(
+                Text.new(theme.font, value.substring(ln.start, ln.end)).at(tx, ly).size(w.tsize).color(
+                    theme.text,
+                ),
+            )
+            if focused && caret_on && li == ccl {
+                let caret = tx + theme.font.width(w.tsize, value.substring(ln.start, cp)) + 1
+                f.rect(caret, ly, 2, lh, theme.accent)
+            }
+        }
+        r = r + 1
+    }
+    f.unclip()
+    return
 }
 
 fun _paint_dropdown(w: Widget, f: Frame, theme: Theme, selected: String, hovered: Bool) {

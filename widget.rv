@@ -44,6 +44,7 @@ enum WidgetKind {
     Label(String),
     Button(String, String),
     Input(String, String),
+    TextArea(String, String),
     Checkbox(String, Bool, String),
     Radio(String, Bool, String),
     Slider(String, Int, Int, Int),
@@ -144,6 +145,14 @@ fun button(id: String, text: String) -> Widget {
 // framework edits it and sends UiEvent.Input(id, new_value).
 fun input(id: String, value: String) -> Widget {
     return _leaf(WidgetKind.Input(id, value))
+}
+
+// A multi-line text area that wraps its text to the widget width. value is the
+// current text (with embedded newlines); the framework edits it, keeps the caret
+// visible, and sends UiEvent.Input(id, new_value). Give it a height (with height
+// or grow) to set how many rows are visible; content past that scrolls.
+fun textarea(id: String, value: String) -> Widget {
+    return _leaf(WidgetKind.TextArea(id, value))
 }
 
 // A labelled checkbox. checked comes from the model; clicking it sends
@@ -334,6 +343,11 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
                 return Some(Hit { id, input: true, drag: false })
             }
         },
+        TextArea(id, value) -> {
+            if _contains(w.box, x, y) {
+                return Some(Hit { id, input: true, drag: false })
+            }
+        },
         Checkbox(id, checked, text) -> {
             if _contains(w.box, x, y) {
                 return Some(Hit { id, input: false, drag: false })
@@ -509,6 +523,9 @@ fun _collect_focusables(w: Widget, out: List<String>) {
         Input(id, value) -> {
             out.push(id)
         },
+        TextArea(id, value) -> {
+            out.push(id)
+        },
         _ -> {},
     }
     let i = 0
@@ -578,10 +595,16 @@ fun _slider_value_at(w: Widget, id: String, x: Int) -> Int? {
     return None
 }
 
-// The input widget with this id, if present (carries its box for click-to-caret).
+// The input or text area with this id, if present (carries its box and value for
+// focus, click-to-caret, and editing).
 fun _find_input(w: Widget, id: String) -> Widget? {
     match w.kind {
         Input(iid, value) -> {
+            if iid == id {
+                return Some(w)
+            }
+        },
+        TextArea(iid, value) -> {
             if iid == id {
                 return Some(w)
             }
@@ -601,10 +624,15 @@ fun _find_input(w: Widget, id: String) -> Widget? {
     return None
 }
 
-// The current text of the input with this id, if present in the tree.
+// The current text of the input or text area with this id, if present.
 fun _find_input_value(w: Widget, id: String) -> String? {
     match w.kind {
         Input(iid, value) -> {
+            if iid == id {
+                return Some(value)
+            }
+        },
+        TextArea(iid, value) -> {
             if iid == id {
                 return Some(value)
             }

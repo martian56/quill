@@ -17,9 +17,9 @@
 //     }
 
 import "./lib" { Theme, Rect, Window, WindowConfig, start, stop }
-import "./widget" { Widget, _hit, _tip_at, _find_input, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at, _find_dropdown, _dd_option }
+import "./widget" { Widget, WidgetKind, _hit, _tip_at, _find_input, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at, _find_dropdown, _dd_option }
 import "./layout" { measure, arrange }
-import "./paint" { Interaction, Tooltip, paint, dd_option_at, paint_menu, paint_tooltip, caret_index_at }
+import "./paint" { Interaction, Tooltip, paint, dd_option_at, paint_menu, paint_tooltip, caret_index_at, textarea_caret_at, textarea_lines, textarea_rows, caret_line, textarea_move_v, textarea_home, textarea_end }
 import std/string
 import std/collections { Map, empty_map }
 
@@ -36,6 +36,8 @@ const KEY_C: Int = 67
 const KEY_V: Int = 86
 const KEY_A: Int = 65
 const KEY_X: Int = 88
+const KEY_UP: Int = 265
+const KEY_DOWN: Int = 264
 
 // How long the cursor must rest before a widget's tooltip appears.
 const TOOLTIP_DELAY: Int = 600
@@ -99,10 +101,31 @@ fun _value_len(tree: Widget, id: String) -> Int {
     }
 }
 
-// The caret byte offset for a click at x in the input with this id.
-fun _caret_at_click(tree: Widget, theme: Theme, id: String, x: Int) -> Int {
+fun _kind_value(w: Widget) -> String {
+    return match w.kind {
+        Input(id, value) -> value,
+        TextArea(id, value) -> value,
+        _ -> "",
+    }
+}
+
+// The caret byte offset for a click at (x, y) in the field with this id. Single
+// line inputs ignore y; text areas map the row using their current scroll top.
+fun _caret_at_click(
+    tree: Widget,
+    theme: Theme,
+    id: String,
+    x: Int,
+    y: Int,
+    tops: Map<String, Int>,
+) -> Int {
     return match _find_input(tree, id) {
-        Some(inp) -> caret_index_at(inp, theme, x),
+        Some(inp) -> {
+            match inp.kind {
+                TextArea(tid, value) -> textarea_caret_at(inp, theme, x, y, tops.get_or(id, 0)),
+                _ -> caret_index_at(inp, theme, x),
+            }
+        },
         None -> 0,
     }
 }
@@ -170,8 +193,24 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
     let theme_of = app.theme
 
     let offsets = empty_map<String, Int>()
+    let ta_tops = empty_map<String, Int>()
     let model = (app.init)()
-    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None, offsets, 0, 0, None, None)
+    let last = _draw(
+        win,
+        view_fn,
+        theme_of,
+        model,
+        -1,
+        -1,
+        false,
+        None,
+        offsets,
+        0,
+        0,
+        0,
+        None,
+        None,
+    )
 
     let was_down = false
     let pressed: String? = None
@@ -247,7 +286,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
                                 } else {
                                     if h.input {
                                         focused = Some(h.id)
-                                        caret = _caret_at_click(last, theme, h.id, mx)
+                                        caret = _caret_at_click(last, theme, h.id, mx, my, ta_tops)
                                         anchor = caret
                                         text_sel = Some(h.id)
                                         pressed = None
@@ -278,7 +317,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         match text_sel {
             Some(tid) -> {
                 if down {
-                    caret = _caret_at_click(last, theme, tid, mx)
+                    caret = _caret_at_click(last, theme, tid, mx, my, ta_tops)
                 }
             },
             None -> {},
@@ -308,12 +347,15 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
             last_cursor = cur_kind
         }
 
-        let outcome = _handle_input(model, update_fn, win, last, focused, caret, anchor)
+        let outcome = _handle_input(model, update_fn, win, theme, last, focused, caret, anchor)
         model = outcome.model
         focused = outcome.focused
         caret = outcome.caret
         anchor = outcome.anchor
         model = update_fn(model, UiEvent.Tick)
+
+        // Keep the focused text area scrolled so its caret stays in view.
+        let ta_top = _focused_ta_top(last, theme, focused, caret, ta_tops)
 
         // Tooltip hover: moving the cursor resets the timer and hides any tip; a
         // still cursor resting over a tip target reveals it after the delay. Held
@@ -366,6 +408,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
             offsets,
             caret,
             anchor,
+            ta_top,
             open_dd,
             tip,
         )
@@ -422,6 +465,7 @@ fun _draw<M>(
     offsets: Map<String, Int>,
     caret: Int,
     anchor: Int,
+    ta_top: Int,
     open_dd: String?,
     tip: Tooltip?,
 ) -> Widget {
@@ -444,6 +488,7 @@ fun _draw<M>(
             caret_on,
             caret_pos: caret,
             sel_anchor: anchor,
+            ta_top,
         },
     )
     match open_dd {
@@ -498,6 +543,56 @@ fun _hit_id(w: Widget, x: Int, y: Int) -> String? {
     }
 }
 
+// Update and return the scroll top (in visual lines) for the focused text area
+// so its caret line stays within the visible rows. Returns 0 when nothing, or a
+// single line input, is focused.
+fun _focused_ta_top(
+    tree: Widget,
+    theme: Theme,
+    focused: String?,
+    caret: Int,
+    tops: Map<String, Int>,
+) -> Int {
+    match focused {
+        Some(fid) -> {
+            match _find_input(tree, fid) {
+                Some(area) -> {
+                    match area.kind {
+                        TextArea(id, value) -> {
+                            let lines = textarea_lines(area, theme)
+                            let rows = textarea_rows(area, theme)
+                            let cl = caret_line(lines, caret)
+                            let top = tops.get_or(fid, 0)
+                            if cl < top {
+                                top = cl
+                            }
+                            if cl >= top + rows {
+                                top = cl - rows + 1
+                            }
+                            let maxtop = lines.len() - rows
+                            if maxtop < 0 {
+                                maxtop = 0
+                            }
+                            if top > maxtop {
+                                top = maxtop
+                            }
+                            if top < 0 {
+                                top = 0
+                            }
+                            tops.set(fid, top)
+                            return top
+                        },
+                        _ -> {},
+                    }
+                },
+                None -> {},
+            }
+        },
+        None -> {},
+    }
+    return 0
+}
+
 // What input handling produced: the folded model, the (possibly changed) focus,
 // and the caret and selection-anchor byte offsets in the focused field (equal
 // when there is no selection).
@@ -526,6 +621,7 @@ fun _handle_input<M>(
     model: M,
     update_fn: fun(M, UiEvent) -> M,
     win: Window,
+    theme: Theme,
     last: Widget,
     focused: String?,
     caret: Int,
@@ -533,15 +629,29 @@ fun _handle_input<M>(
 ) -> InputOutcome<M> {
     let has_focus = false
     let cur = ""
+    let area: Widget? = None
     match focused {
         Some(fid) -> {
             has_focus = true
-            match _find_input_value(last, fid) {
-                Some(v) -> {
-                    cur = v
+            match _find_input(last, fid) {
+                Some(inp) -> {
+                    cur = _kind_value(inp)
+                    match inp.kind {
+                        TextArea(id, v) -> {
+                            area = Some(inp)
+                        },
+                        _ -> {},
+                    }
                 },
                 None -> {},
             }
+        },
+        None -> {},
+    }
+    let is_area = false
+    match area {
+        Some(a) -> {
+            is_area = true
         },
         None -> {},
     }
@@ -624,13 +734,53 @@ fun _handle_input<M>(
                 }
             }
             if key == KEY_HOME {
-                caret = 0
+                if is_area {
+                    match area {
+                        Some(a) -> {
+                            caret = textarea_home(a, theme, caret)
+                        },
+                        None -> {},
+                    }
+                } else {
+                    caret = 0
+                }
                 if !shift {
-                    anchor = 0
+                    anchor = caret
                 }
             }
             if key == KEY_END {
-                caret = cur.length()
+                if is_area {
+                    match area {
+                        Some(a) -> {
+                            caret = textarea_end(a, theme, caret)
+                        },
+                        None -> {},
+                    }
+                } else {
+                    caret = cur.length()
+                }
+                if !shift {
+                    anchor = caret
+                }
+            }
+            if is_area && key == KEY_UP {
+                match area {
+                    Some(a) -> {
+                        caret = textarea_move_v(a, theme, caret, -1)
+                    },
+                    None -> {},
+                }
+                if !shift {
+                    anchor = caret
+                }
+            }
+            if is_area && key == KEY_DOWN {
+                match area {
+                    Some(a) -> {
+                        caret = textarea_move_v(a, theme, caret, 1)
+                    },
+                    None -> {},
+                }
                 if !shift {
                     anchor = caret
                 }
@@ -672,11 +822,20 @@ fun _handle_input<M>(
             anchor = caret
         }
         if key == KEY_ENTER {
-            match focused {
-                Some(fid) -> {
-                    model = update_fn(model, UiEvent.Submit(fid))
-                },
-                None -> {},
+            if is_area && has_focus {
+                let lo = _sel_lo(caret, anchor)
+                let hi = _sel_hi(caret, anchor)
+                cur = _splice(cur, lo, hi, "\n")
+                caret = lo + 1
+                anchor = caret
+                changed = true
+            } else {
+                match focused {
+                    Some(fid) -> {
+                        model = update_fn(model, UiEvent.Submit(fid))
+                    },
+                    None -> {},
+                }
             }
         }
         k = win.poll_key()

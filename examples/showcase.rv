@@ -1,5 +1,5 @@
 import "../lib" { Font, Color, Image, Theme, WindowConfig }
-import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, radio, slider, dropdown, image, divider, tabs, tab_of }
+import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, textarea, checkbox, radio, slider, dropdown, image, divider, tabs, tab_of }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -13,6 +13,7 @@ struct Model {
     newest_first: Bool,
     priority: String,
     side_tab: String,
+    notes: String,
     logo: Image,
     font: Font,
     theme: Theme,
@@ -44,6 +45,7 @@ fun showcase_init() -> Model {
         newest_first: true,
         priority: "Medium",
         side_tab: "Settings",
+        notes: "This is a text area. It wraps long lines to the width and takes newlines.\nTry typing, the arrow keys, and dragging to select.",
         logo,
         font,
         theme: Theme.dark(font),
@@ -126,6 +128,9 @@ fun _on_click(m: Model, id: String) -> Model {
 fun _on_input(m: Model, id: String, s: String) -> Model {
     if id == "draft" {
         m.draft = s
+    }
+    if id == "notes" {
+        m.notes = s
     }
     return m
 }
@@ -241,16 +246,28 @@ fun side_settings(m: Model) -> Widget {
     ).gap(12)
 }
 
+fun side_notes(m: Model) -> Widget {
+    return column(
+        [
+            label("Notes").size(15).color(m.theme.muted),
+            textarea("notes", m.notes).size(15).height(150),
+        ],
+    ).gap(8)
+}
+
 fun sidebar(m: Model) -> Widget {
     let content = side_settings(m)
     if m.side_tab == "Info" {
         content = side_info(m)
     }
+    if m.side_tab == "Notes" {
+        content = side_notes(m)
+    }
     return panel(
         column(
             [
                 row([image(m.logo.id, 48, 48), label("quill").size(30)]).gap(14).align(Align.Center),
-                tabs("side", m.side_tab, ["Info", "Settings"], m.theme),
+                tabs("side", m.side_tab, ["Info", "Settings", "Notes"], m.theme),
                 divider(),
                 content,
                 button("about", "About").width(120).tip("Version and credits"),
