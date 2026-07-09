@@ -38,6 +38,11 @@ fun measure(w: Widget, theme: Theme) {
             w.mw = box + CHECK_GAP + theme.font.width(w.tsize, text)
             w.mh = box
         },
+        Radio(id, selected, text) -> {
+            let box = theme.font.line_height(w.tsize)
+            w.mw = box + CHECK_GAP + theme.font.width(w.tsize, text)
+            w.mh = box
+        },
         Slider(id, value, lo, hi) -> {
             w.mw = SLIDER_W
             w.mh = SLIDER_H

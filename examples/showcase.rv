@@ -1,5 +1,5 @@
 import "../lib" { Font, Color, Image, Theme, WindowConfig }
-import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, slider, image, divider }
+import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, radio, slider, image, divider }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -10,6 +10,7 @@ struct Model {
     about_open: Bool,
     dark: Bool,
     item_size: Int,
+    newest_first: Bool,
     logo: Image,
     font: Font,
     theme: Theme,
@@ -38,6 +39,7 @@ fun showcase_init() -> Model {
         about_open: false,
         dark: true,
         item_size: 18,
+        newest_first: true,
         logo,
         font,
         theme: Theme.dark(font),
@@ -79,6 +81,14 @@ fun _on_click(m: Model, id: String) -> Model {
         } else {
             m.theme = Theme.light(m.font)
         }
+        return m
+    }
+    if id == "sort_new" {
+        m.newest_first = true
+        return m
+    }
+    if id == "sort_old" {
+        m.newest_first = false
         return m
     }
     if id == "about" {
@@ -142,12 +152,29 @@ fun items_view(m: Model) -> Widget {
         return label("nothing yet, add something above").size(16).color(m.theme.muted)
     }
     let rows: List<Widget> = []
-    let i = 0
-    while i < m.items.len() {
-        rows.push(item_row(m, m.items[i], i))
-        i = i + 1
+    if m.newest_first {
+        let i = m.items.len() - 1
+        while i >= 0 {
+            rows.push(item_row(m, m.items[i], i))
+            i = i - 1
+        }
+    } else {
+        let i = 0
+        while i < m.items.len() {
+            rows.push(item_row(m, m.items[i], i))
+            i = i + 1
+        }
     }
     return column(rows).gap(10)
+}
+
+// The Add button is disabled until there is something to add.
+fun add_button(m: Model) -> Widget {
+    let b = button("add", "Add").width(110)
+    if m.draft == "" {
+        return b.disabled()
+    }
+    return b
 }
 
 fun footer(m: Model) -> Widget {
@@ -181,6 +208,8 @@ fun sidebar(m: Model) -> Widget {
                 divider(),
                 checkbox("show_count", m.show_count, "Show item count").size(16),
                 checkbox("theme", m.dark, "Dark theme").size(16),
+                radio("sort_new", m.newest_first, "Newest first").size(16),
+                radio("sort_old", !m.newest_first, "Oldest first").size(16),
                 label("Text size: ${m.item_size}").size(15).color(m.theme.muted),
                 slider("item_size", m.item_size, 14, 30),
                 button("about", "About").width(120),
@@ -209,9 +238,7 @@ fun main_view(m: Model) -> Widget {
             column(
                 [
                     label("Todos").size(36),
-                    row([input("draft", m.draft).grow(1).size(18), button("add", "Add").width(110)]).gap(
-                        12,
-                    ),
+                    row([input("draft", m.draft).grow(1).size(18), add_button(m)]).gap(12),
                     scroll("items", items_view(m)).grow(1),
                     footer(m),
                 ],

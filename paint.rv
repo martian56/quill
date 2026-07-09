@@ -55,6 +55,9 @@ fun _paint_bg(w: Widget, f: Frame) {
 }
 
 fun _button_bg(w: Widget, theme: Theme, it: Interaction) -> Color {
+    if !w.enabled {
+        return theme.field
+    }
     let base = _fill_or(w, theme.accent)
     if !_contains(w.box, it.x, it.y) {
         return base
@@ -89,7 +92,10 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
             let lh = theme.font.line_height(w.tsize)
             let tx = w.box.x + (w.box.w - tw) / 2
             let ty = w.box.y + (w.box.h - lh) / 2
-            let col = _tint_or(w, theme.on_accent)
+            let col = theme.muted
+            if w.enabled {
+                col = _tint_or(w, theme.on_accent)
+            }
             f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
         },
         Input(id, value) -> {
@@ -97,6 +103,9 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         },
         Checkbox(id, checked, text) -> {
             _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
+        },
+        Radio(id, selected, text) -> {
+            _paint_radio(w, f, theme, selected, text, _contains(w.box, it.x, it.y))
         },
         Slider(id, value, lo, hi) -> {
             _paint_slider(w, f, theme, value, lo, hi, _contains(w.box, it.x, it.y))
@@ -150,6 +159,27 @@ fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: Stri
     f.rounded_rect(bx, by, box, box, 5, fill)
     if checked {
         f.text(Text.new(theme.font, "✓").at(bx + box / 6, by).size(w.tsize).color(theme.on_accent))
+    }
+    f.text(Text.new(theme.font, text).at(bx + box + CHECK_GAP, by).size(w.tsize).color(theme.text))
+    return
+}
+
+fun _paint_radio(w: Widget, f: Frame, theme: Theme, selected: Bool, text: String, hovered: Bool) {
+    let box = theme.font.line_height(w.tsize)
+    let bx = w.box.x
+    let by = w.box.y
+    let ring = theme.field
+    if hovered {
+        ring = ring.lighten(12)
+    }
+    if selected {
+        ring = theme.accent
+    }
+    f.rounded_rect(bx, by, box, box, box / 2, ring)
+    if selected {
+        let inset = box / 4
+        let inner = box - 2 * inset
+        f.rounded_rect(bx + inset, by + inset, inner, inner, inner / 2, theme.on_accent)
     }
     f.text(Text.new(theme.font, text).at(bx + box + CHECK_GAP, by).size(w.tsize).color(theme.text))
     return

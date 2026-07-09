@@ -45,6 +45,7 @@ enum WidgetKind {
     Button(String, String),
     Input(String, String),
     Checkbox(String, Bool, String),
+    Radio(String, Bool, String),
     Slider(String, Int, Int, Int),
     Image(Int, Int, Int),
     Divider,
@@ -67,6 +68,7 @@ struct Widget {
     tint: Color?,
     cross: Align,
     main: Justify,
+    enabled: Bool,
     mw: Int,
     mh: Int,
     box: Rect,
@@ -88,6 +90,7 @@ fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
         tint: None,
         cross: Align.Stretch,
         main: Justify.Start,
+        enabled: true,
         mw: 0,
         mh: 0,
         box: Rect { x: 0, y: 0, w: 0, h: 0 },
@@ -144,6 +147,12 @@ fun input(id: String, value: String) -> Widget {
 // UiEvent.Click(id), so update flips the flag.
 fun checkbox(id: String, checked: Bool, text: String) -> Widget {
     return _leaf(WidgetKind.Checkbox(id, checked, text))
+}
+
+// A labelled radio button. selected comes from the model; clicking it sends
+// UiEvent.Click(id), so update sets the group's value to id.
+fun radio(id: String, selected: Bool, text: String) -> Widget {
+    return _leaf(WidgetKind.Radio(id, selected, text))
 }
 
 // A horizontal slider from lo to hi. value comes from the model; dragging the
@@ -221,6 +230,12 @@ impl Widget {
         self.main = j
         return self
     }
+
+    // Grey this control out and stop it responding to clicks.
+    fun disabled(self) -> Widget {
+        self.enabled = false
+        return self
+    }
 }
 
 fun _contains(r: Rect, x: Int, y: Int) -> Bool {
@@ -261,6 +276,9 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
         }
         i = i + 1
     }
+    if !w.enabled {
+        return None
+    }
     match w.kind {
         Button(id, text) -> {
             if _contains(w.box, x, y) {
@@ -273,6 +291,11 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
             }
         },
         Checkbox(id, checked, text) -> {
+            if _contains(w.box, x, y) {
+                return Some(Hit { id, input: false, drag: false })
+            }
+        },
+        Radio(id, selected, text) -> {
             if _contains(w.box, x, y) {
                 return Some(Hit { id, input: false, drag: false })
             }
