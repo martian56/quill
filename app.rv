@@ -17,8 +17,9 @@
 //     }
 
 import "./lib" { Theme, Rect, Window, WindowConfig, start, stop }
-import "./widget" { Widget, Interaction, measure, arrange, paint, _hit, _find_input_value, _drop_last }
+import "./widget" { Widget, Interaction, measure, arrange, paint, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent }
 import std/string
+import std/collections { Map, empty_map }
 
 const KEY_BACKSPACE: Int = 259
 
@@ -67,8 +68,9 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
     let view_fn = app.view
     let theme_of = app.theme
 
+    let offsets = empty_map<String, Int>()
     let model = (app.init)()
-    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None)
+    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None, offsets)
 
     let was_down = false
     let pressed: String? = None
@@ -82,6 +84,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         let mx = win.mouse_x()
         let my = win.mouse_y()
         let down = win.mouse_down()
+        _scroll(win, last, offsets, mx, my)
         if down && !was_down {
             match _hit(last, mx, my) {
                 Some(h) -> {
@@ -108,12 +111,36 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         model = _drain_input(model, update_fn, win, last, focused)
         model = update_fn(model, UiEvent.Tick)
 
-        last = _draw(win, view_fn, theme_of, model, mx, my, down, focused)
+        last = _draw(win, view_fn, theme_of, model, mx, my, down, focused, offsets)
     }
 
     win.close()
     stop()
     return true
+}
+
+// Apply this frame's wheel movement to the scroll container under the cursor.
+fun _scroll(win: Window, last: Widget, offsets: Map<String, Int>, mx: Int, my: Int) {
+    let dy = win.scroll_y()
+    if dy == 0 {
+        return
+    }
+    match _scroll_at(last, mx, my) {
+        Some(sw) -> {
+            let sid = _scroll_id(sw)
+            let max_off = _scroll_extent(sw)
+            let next = offsets.get_or(sid, 0) - dy
+            if next < 0 {
+                next = 0
+            }
+            if next > max_off {
+                next = max_off
+            }
+            offsets.set(sid, next)
+        },
+        None -> {},
+    }
+    return
 }
 
 // Sleep with no timeout when idle; wake ~twice a second while a field is focused
@@ -135,9 +162,11 @@ fun _draw<M>(
     my: Int,
     down: Bool,
     focused: String?,
+    offsets: Map<String, Int>,
 ) -> Widget {
     let theme = theme_of(model)
     let tree = view_fn(model)
+    _apply_scroll(tree, offsets)
     _layout(tree, theme, win)
     let f = win.begin()
     f.clear(theme.bg)

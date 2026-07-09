@@ -13,6 +13,7 @@
 
 import "./lib" { Frame, Rect, Color, Text, Theme }
 import std/string
+import std/collections { Map }
 
 const BUTTON_PAD_X: Int = 16
 const BUTTON_PAD_Y: Int = 9
@@ -28,6 +29,7 @@ enum WidgetKind {
     Column,
     Row,
     Panel,
+    Scroll(String),
     Label(String),
     Button(String, String),
     Input(String, String),
@@ -50,6 +52,7 @@ struct Widget {
     mw: Int,
     mh: Int,
     box: Rect,
+    scroll: Int,
 }
 
 fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
@@ -68,6 +71,7 @@ fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
         mw: 0,
         mh: 0,
         box: Rect { x: 0, y: 0, w: 0, h: 0 },
+        scroll: 0,
     }
 }
 
@@ -86,6 +90,13 @@ fun row(kids: List<Widget>) -> Widget {
 
 fun panel(child: Widget) -> Widget {
     return _widget(WidgetKind.Panel, [child])
+}
+
+// A vertically scrollable viewport around child. Give it a bounded height (with
+// grow or height); when the content is taller, the mouse wheel scrolls it. id
+// keys its scroll position across frames.
+fun scroll(id: String, child: Widget) -> Widget {
+    return _widget(WidgetKind.Scroll(id), [child])
 }
 
 fun label(text: String) -> Widget {
@@ -223,6 +234,14 @@ fun measure(w: Widget, theme: Theme) {
             w.mw = cw + 2 * w.inset
             w.mh = ch + 2 * w.inset
         },
+        Scroll(id) -> {
+            if w.kids.len() > 0 {
+                let child = w.kids[0]
+                measure(child, theme)
+                w.mw = child.mw
+                w.mh = child.mh
+            }
+        },
     }
     if w.wfix >= 0 {
         w.mw = w.wfix
@@ -253,6 +272,24 @@ fun arrange(w: Widget, box: Rect) {
         Panel -> {
             if w.kids.len() > 0 {
                 arrange(w.kids[0], box.inset(w.inset))
+            }
+        },
+        Scroll(id) -> {
+            if w.kids.len() > 0 {
+                let child = w.kids[0]
+                let max_off = child.mh - box.h
+                if max_off < 0 {
+                    max_off = 0
+                }
+                let off = w.scroll
+                if off < 0 {
+                    off = 0
+                }
+                if off > max_off {
+                    off = max_off
+                }
+                w.scroll = off
+                arrange(child, Rect { x: box.x, y: box.y - off, w: box.w, h: child.mh })
             }
         },
         _ -> {},
@@ -416,6 +453,16 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         Input(id, value) -> {
             _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on)
         },
+        Scroll(id) -> {
+            _paint_bg(w, f)
+            f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
+            let i = 0
+            while i < w.kids.len() {
+                paint(w.kids[i], f, theme, it)
+                i = i + 1
+            }
+            f.unclip()
+        },
         _ -> {
             _paint_bg(w, f)
             let i = 0
@@ -461,6 +508,16 @@ struct Hit {
 
 // The topmost interactive widget under (x, y), if any.
 fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
+    // A scroll viewport clips hit-testing to its box, so off-screen children of a
+    // scrolled region are not clickable.
+    match w.kind {
+        Scroll(id) -> {
+            if !_contains(w.box, x, y) {
+                return None
+            }
+        },
+        _ -> {},
+    }
     let i = 0
     while i < w.kids.len() {
         match _hit(w.kids[i], x, y) {
@@ -485,6 +542,64 @@ fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
         _ -> {},
     }
     return None
+}
+
+// Inject each scroll container's saved offset before layout.
+fun _apply_scroll(w: Widget, offsets: Map<String, Int>) {
+    match w.kind {
+        Scroll(id) -> {
+            w.scroll = offsets.get_or(id, 0)
+        },
+        _ -> {},
+    }
+    let i = 0
+    while i < w.kids.len() {
+        _apply_scroll(w.kids[i], offsets)
+        i = i + 1
+    }
+    return
+}
+
+// The innermost scroll container under (x, y), if any.
+fun _scroll_at(w: Widget, x: Int, y: Int) -> Widget? {
+    let i = 0
+    while i < w.kids.len() {
+        match _scroll_at(w.kids[i], x, y) {
+            Some(s) -> {
+                return Some(s)
+            },
+            None -> {},
+        }
+        i = i + 1
+    }
+    match w.kind {
+        Scroll(id) -> {
+            if _contains(w.box, x, y) {
+                return Some(w)
+            }
+        },
+        _ -> {},
+    }
+    return None
+}
+
+fun _scroll_id(w: Widget) -> String {
+    return match w.kind {
+        Scroll(id) -> id,
+        _ -> "",
+    }
+}
+
+// The content and viewport heights of a scroll container, for clamping.
+fun _scroll_extent(w: Widget) -> Int {
+    if w.kids.len() == 0 {
+        return 0
+    }
+    let max_off = w.kids[0].mh - w.box.h
+    if max_off < 0 {
+        return 0
+    }
+    return max_off
 }
 
 // The current text of the input with this id, if present in the tree.
