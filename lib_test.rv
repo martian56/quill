@@ -1,14 +1,8 @@
 import std/test { assert_true, assert_eq }
-import "./sys" { backend_init, backend_terminate }
-import "./lib" { WindowConfig, Color, Step, next, quit }
+import "./lib" { WindowConfig, Color, next, quit }
 
 struct Probe {
     n: Int,
-}
-
-fun test_backend_initializes() {
-    assert_true(backend_init())
-    backend_terminate()
 }
 
 fun test_window_config_builder() {

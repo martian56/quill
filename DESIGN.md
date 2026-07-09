@@ -8,20 +8,18 @@ widget toolkit. quill is to pixels what plumage is to the terminal.
 Give the developer a model and three functions and own everything else:
 
 ```
-// A quill app, the same shape as a plumage app.
 import "github.com/martian56/quill" { App, run, next }
-import "github.com/martian56/quill/widget" { column, label, button }
+import "github.com/martian56/quill/widgets" { column, label, button }
 
 struct Model { count: Int }
 
 fun init() -> Model { return Model { count: 0 } }
 
-fun update(m: Model, e: Event) -> Model {
+fun update(m: Model, e: Event) -> Step<Model> {
     match e {
-        Click("inc") -> { m.count = m.count + 1 },
-        _ -> {},
+        Click("inc") -> { return next(Model { count: m.count + 1 }) },
+        _ -> { return next(m) },
     }
-    return m
 }
 
 fun view(m: Model) -> Widget {
@@ -32,7 +30,8 @@ fun view(m: Model) -> Widget {
 }
 
 fun main() {
-    run<Model>(App { init, update, view, title: "counter", width: 480, height: 320 })
+    let win = WindowConfig.new().size(480, 320).title("counter")
+    run<Model>(App { init: init, update: update, view: view, window: win })
 }
 ```
 
@@ -40,101 +39,129 @@ fun main() {
 frame. The look is modern by default (a theme of tokens: spacing, radius,
 palette, type, light and dark).
 
+The retained widget tree above is the target. What ships today (M1) is the layer
+underneath it: `view(m: Model, f: Frame)` paints the frame directly. The widget
+layer renders onto that same paint surface, so both coexist and the retained API
+is added on top without replacing the immediate one.
+
+## Project layout
+
+Raven does not re-export: a module exposes only the names it declares itself. So
+every name a user imports from `github.com/martian56/quill` must be defined in
+`lib.rv`. Internal layers live in their own modules that `lib.rv` imports;
+user-facing extras (widgets) are their own subpath modules, imported directly as
+`github.com/martian56/quill/widgets`.
+
+```
+quill/
+  lib.rv              public API: App, run, Event, Step, next, quit,
+                      Frame, Color, WindowConfig
+  lib_test.rv         public-API tests
+  backend/
+    sys.rv            the only extern owner; wraps the C shim
+    sys_test.rv
+  c/
+    quill.c           backend shim (q_* functions, int64/cstr ABI)
+    glfw_unity.c      GLFW common + win32 + wgl, one translation unit
+    glfw_null.c       GLFW null platform, separate to avoid static clashes
+    glfw/             vendored GLFW 3.4
+  src/main.rv         demo launcher (rvpm run -- hello)
+  examples/hello.rv
+```
+
+Each later layer is its own module (M2 `backend/render.rv`, `backend/text.rv`;
+M3 `layout.rv` and `widgets/`), so files stay small and focused.
+
 ## Layers
 
-The interesting part (the Raven toolkit) is decoupled from the platform, and
-the backend lives behind a small fixed C interface so it can be swapped.
+The Raven toolkit is decoupled from the platform, and the backend lives behind a
+small C interface so it can be swapped.
 
 | Layer | File(s) | Role |
 |-------|---------|------|
-| L0 C backend | `c/*.c`, `c/*.h` | window, input, GPU renderer, text; exposes the fixed quill C interface |
-| L1 bindings | `backend.rv` | `extern "C"` decls + String/pointer marshaling → `Window`, `Event`, `Renderer` |
-| L2 paint | `paint.rv` | typed drawing: `Color`, `Rect`, `Painter { rect, rounded_rect, text, image, clip }` |
-| L3 layout | `layout.rv` | flexbox-style: `Row`/`Column`/`Stack`, padding, gap, align/justify, grow/fixed/min-max; measure + arrange |
-| L4 widgets | `widget.rv`, `widgets/` | retained tree: `label`, `button`, `text_input`, `panel`, `row`/`column`, `scroll`, then checkbox/slider |
-| L5 app | `lib.rv`, `app.rv` | the Elm loop: `App<M>{ init, update, view }`; `run` owns window + loop + draw, redraws on change |
+| L0 C backend | `c/*.c` | window, input, GPU renderer, text; the flat `q_*` C interface |
+| L1 bindings | `backend/sys.rv` | `extern "C"` decls + string/handle marshaling |
+| L2 paint | `Frame` in `lib.rv` | typed drawing: `clear`, then `rect`, `rounded_rect`, `text`, `clip` |
+| L3 layout | `layout.rv` | flexbox-style `Row`/`Column`/`Stack`, padding, gap, align, grow; measure + arrange |
+| L4 widgets | `widgets/` | `label`, `button`, `text_input`, `panel`, `row`/`column`, `scroll`, checkbox/slider |
+| L5 app | `lib.rv` | the loop: `App<M>{ init, update, view }`; `run` owns window + loop + draw |
 | L6 theme | `theme.rv` | design tokens (palette, spacing/radius scale, type), light + dark |
 
 Pure layers (layout, theme, event mapping) get `*_test.rv`.
 
-## The L0 C interface (fixed, backend-agnostic)
+## The L0 C interface
 
-The shim exposes roughly this surface; the widget layers never see the backend:
+The shim exposes a flat interface over int64 and C strings; the widget layers
+never see the backend. The window + clear subset below ships in M1; the renderer
+and text calls arrive in M2.
 
 ```c
-// window + loop
-int   ql_window_open(const char* title, int w, int h);
-void  ql_window_close(void);
-int   ql_poll_event(QlEvent* out);   // manual poll: 1 if an event was written, 0 when drained
-void  ql_window_size(int* w, int* h, float* dpi_scale);
+// window + loop (M1)
+int64_t q_init(void);
+int64_t q_window_open(int64_t w, int64_t h, const char* title);  // handle, or 0
+int64_t q_window_should_close(int64_t win);
+void    q_poll(void);
+void    q_window_swap(int64_t win);
+void    q_window_close(int64_t win);
+int64_t q_framebuffer_width(int64_t win);
+int64_t q_framebuffer_height(int64_t win);
+void    q_clear_rgb(int64_t r, int64_t g, int64_t b);
 
-// frame + renderer (a small batched 2D API)
-void  ql_begin_frame(uint32_t clear_rgba);
-void  ql_fill_rect(float x, float y, float w, float h, uint32_t rgba);
-void  ql_rounded_rect(float x, float y, float w, float h, float radius, uint32_t rgba);
-void  ql_text(int font, float x, float y, float px, const char* utf8, uint32_t rgba);
-void  ql_measure_text(int font, float px, const char* utf8, float* w, float* h);
-void  ql_push_clip(float x, float y, float w, float h);
-void  ql_pop_clip(void);
-void  ql_present(void);
-
-// text
-int   ql_font_load(const char* path);       // or a bundled default font
+// renderer + text (M2)
+void    q_fill_rect(...);
+void    q_rounded_rect(...);
+void    q_text(int64_t font, ...);
+void    q_measure_text(int64_t font, ...);
+int64_t q_font_load(const char* path);
 ```
 
-## Backend (chosen: sokol, self-contained, zero system deps)
+Colors cross as int64 channels and convert to float inside C, so no float ever
+crosses the boundary; window handles cross as an int64 holding the pointer.
 
-- **Renderer**: `sokol_gfx.h` (header-only, modern GPU: GL / D3D11 / Metal) with a
-  small batched 2D pipeline, textured quads plus a shader for solid and
-  rounded / SDF fills, so shapes are crisp and shadows are cheap.
-- **Text**: `fontstash.h` + `stb_truetype.h` (header-only) → a glyph atlas,
-  measured and drawn through sokol_gfx. A default UI font is bundled.
-- **Window + input + GPU context**: a **manual-poll** window layer, see below.
+## Backend (self-contained, zero system deps)
 
-Everything here is bundled C compiled through Raven's `[ffi] sources`, like
-`raven-sqlite` bundles the SQLite amalgamation. No DLL to ship.
+Everything is bundled C compiled through Raven's `[ffi] sources`, so there is no
+DLL to ship.
+
+- **Window + input + GL context**: GLFW 3.4, vendored into `c/glfw/` and
+  statically linked. On Windows it links gdi32/user32/shell32/opengl32.
+- **Renderer**: `sokol_gfx.h` (header-only, GL / D3D11 / Metal) with a small
+  batched 2D pipeline: textured quads plus a shader for solid and rounded fills.
+  (M2.)
+- **Text**: `fontstash.h` + `stb_truetype.h` (header-only) into a glyph atlas
+  drawn through sokol_gfx, with a bundled default font. (M2.)
 
 ## Loop model (the key constraint)
 
-Raven's `extern "C"` is **import-only**: Raven functions are local symbols, so C
-cannot call back into Raven. That rules out `sokol_app`'s callback-driven loop
-(its frame callback would need to invoke Raven's `update`/`view`).
+Raven's `extern "C"` is import-only: Raven functions are local symbols, so C
+cannot call back into Raven. That rules out callback-driven windowing (a frame
+callback would need to invoke Raven's `update`/`view`), which is why GLFW is
+driven by manual polling rather than a callback loop, and why `sokol_app` is not
+used.
 
-Resolution: **Raven owns the loop.** The shim offers a *manual* `ql_poll_event`
-plus `ql_begin_frame` / `ql_present`, and `run` in Raven drives it:
+Raven owns the loop. `run` opens the window, then each iteration polls events,
+calls `update`, calls `view` to paint, and swaps buffers:
 
 ```
 run(app):
-    ql_window_open(...)
+    backend_init(); open_window(...)
     model = init()
-    loop:
-        while ql_poll_event(&e): model = update(model, map(e))   // drain input
-        tree = view(model); layout(tree, window_size); paint(tree)
-        ql_present()
-        (block until the next event or a small tick, so it is not a busy loop)
+    while not should_close:
+        model = update(model, event)   // Tick / Resize / Close
+        view(model, frame)             // draw
+        swap_buffers(); poll_events()
 ```
 
-So the window layer must support manual event polling (not a blocking
-`sapp_run`). Two ways to get that:
-
-- **Option A (planned for v1): a small custom platform layer.** ~250 lines of C
-  per OS: Win32 + WGL (OpenGL) first, since that is the current dev platform;
-  X11 and Cocoa added later behind the same L0 interface. sokol_gfx renders on
-  the context it creates. No Raven change. Cross-platform is incremental.
-- **Option B (future): add bidirectional FFI to Raven** (let annotated Raven
-  functions export a C symbol, so C can call them). Then `sokol_app` handles
-  windowing on every platform for free, and the whole ecosystem gains C→Raven
-  callbacks. This is a raven compiler change, so it is a deliberate later step,
-  not a v1 blocker.
-
-v1 targets Windows (custom Win32 + WGL layer); sokol_gfx and fontstash are
-already cross-platform, so only the window layer is per-OS.
+A future option is to add bidirectional FFI to Raven (let annotated Raven
+functions export a C symbol). That would let `sokol_app` handle windowing on
+every platform, but it is a compiler change and not required: GLFW already gives
+cross-platform manual-poll windowing.
 
 ## DPI / hi-dpi
 
-`view` and layout work in logical pixels; the shim reports a `dpi_scale` and the
-renderer multiplies to physical pixels, so text and shapes stay crisp on hi-dpi
-displays.
+`view` and layout work in logical pixels; the shim reports the framebuffer size
+against the window size, and the renderer multiplies to physical pixels, so text
+and shapes stay crisp on hi-dpi displays.
 
 ## Theme
 
@@ -145,30 +172,31 @@ styling work.
 
 ## Milestones
 
-1. **Hello window.** Win32 + WGL window, sokol_gfx clearing the frame, the
-   `run` loop, `ql_poll_event` delivering close/resize. A blank window that
-   closes cleanly, wired through Raven.
+1. **Hello window.** DONE. GLFW window, GL clearing the frame, the `run` loop,
+   Tick/Resize/Close events, a blank window that closes cleanly through Raven.
 2. **Renderer + text.** `fill_rect`, `rounded_rect`, `clip`, and fontstash text
    with `measure_text`. A frame that draws colored rounded rects and a string.
 3. **Layout + first widgets.** The flex layout engine, plus `label`, `button`,
    `panel`, `row`/`column`. The counter example renders.
 4. **Events + input.** Hit-testing, hover/press/click dispatch, `text_input`
-   with a caret, focus, keyboard. The counter example is interactive.
+   with a caret, focus, keyboard (polled from GLFW state). The counter example
+   is interactive.
 5. **Theme + polish.** Tokens, light/dark, `scroll`, DPI, and a couple of
    showcase examples. Cut `v0.1.0`.
 
 ## Testing
 
-Pure layers, layout, theme, event mapping, hit-testing, are unit-tested with
-`*_test.rv`. The window/renderer are exercised by a manual example app per
-milestone (a real window is not unit-testable in CI, same as plumage's terminal
-smoke tests).
+Pure layers (layout, theme, event mapping, hit-testing) are unit-tested with
+`*_test.rv`. The window and renderer are exercised by a manual example app per
+milestone; a real window is not unit-testable in CI, the same as plumage's
+terminal smoke tests.
 
 ## Risks / open questions
 
-- **Cross-platform windowing** is per-OS C work (Win32 first). Option B
-  (bidirectional FFI + sokol_app) removes this later.
+- **Widget paradigm**: immediate (`view(m, Frame)`) ships first; the retained
+  tree (`view(m) -> Widget`) is layered on top at M3. Settle the exact `App`
+  shape then.
 - **C compiler**: sokol_gfx / fontstash need a C99+ compiler; confirm the one
-  Raven's build uses on each platform in M1.
+  Raven's build uses on each platform at M2.
 - **Text shaping**: stb_truetype does not do complex-script shaping; fine for
   Latin UI now, revisit for i18n.
