@@ -23,6 +23,7 @@ extern "C" {
     fun q_font_load(path: CStr) -> Int
     fun q_text(font: Int, x: Int, y: Int, px: Int, str: CStr, r: Int, g: Int, b: Int, a: Int)
     fun q_measure_width(font: Int, px: Int, str: CStr) -> Int
+    fun q_line_height(font: Int, px: Int) -> Int
 }
 
 fun backend_init() -> Bool {
@@ -124,4 +125,8 @@ fun measure_width(font: Int, px: Int, s: String) -> Int {
     let w = q_measure_width(font, px, c)
     free_cstr(c)
     return w
+}
+
+fun line_height(font: Int, px: Int) -> Int {
+    return q_line_height(font, px)
 }

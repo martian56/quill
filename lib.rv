@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -36,6 +36,21 @@ struct Color {
 impl Color {
     fun rgb(r: Int, g: Int, b: Int) -> Color {
         return Color { r, g, b }
+    }
+}
+
+// A rectangle in pixels from the top-left, used by layout.
+struct Rect {
+    x: Int,
+    y: Int,
+    w: Int,
+    h: Int,
+}
+
+impl Rect {
+    // The rect shrunk by n on every side.
+    fun inset(self, n: Int) -> Rect {
+        return Rect { x: self.x + n, y: self.y + n, w: self.w - 2 * n, h: self.h - 2 * n }
     }
 }
 
@@ -57,6 +72,36 @@ impl Font {
     // Pixel width of s at the given size, for laying text out.
     fun width(self, size: Int, s: String) -> Int {
         return measure_width(self.id, size, s)
+    }
+
+    // Pixel height of one line at the given size.
+    fun line_height(self, size: Int) -> Int {
+        return line_height(self.id, size)
+    }
+}
+
+// The palette and font widgets draw with. Build one with Theme.dark(font).
+struct Theme {
+    font: Font,
+    bg: Color,
+    surface: Color,
+    text: Color,
+    muted: Color,
+    accent: Color,
+    on_accent: Color,
+}
+
+impl Theme {
+    fun dark(font: Font) -> Theme {
+        return Theme {
+            font,
+            bg: Color.rgb(20, 22, 28),
+            surface: Color.rgb(32, 36, 46),
+            text: Color.rgb(235, 237, 242),
+            muted: Color.rgb(150, 160, 175),
+            accent: Color.rgb(90, 140, 240),
+            on_accent: Color.rgb(245, 247, 252),
+        }
     }
 }
 

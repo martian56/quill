@@ -1,0 +1,51 @@
+import std/test { assert_eq }
+import "./lib" { Theme, Font, Rect }
+import "./widget" { Widget, column, row, measure, arrange }
+
+// A fixed-size leaf that needs no font, so layout is testable headlessly.
+fun fixed(w: Int, h: Int) -> Widget {
+    let none: List<Widget> = []
+    return column(none).width(w).height(h)
+}
+
+fun flexible(h: Int, weight: Int) -> Widget {
+    let none: List<Widget> = []
+    return column(none).height(h).grow(weight)
+}
+
+fun dummy_theme() -> Theme {
+    return Theme.dark(Font { id: 0 })
+}
+
+fun test_column_measures_with_pad_and_gap() {
+    let root = column([fixed(100, 40), fixed(80, 60)]).pad(10).gap(8)
+    measure(root, dummy_theme())
+    assert_eq(root.mw, 120)
+    assert_eq(root.mh, 128)
+}
+
+fun test_column_stacks_children() {
+    let root = column([fixed(100, 40), fixed(80, 60)]).pad(10).gap(8)
+    measure(root, dummy_theme())
+    arrange(root, Rect { x: 0, y: 0, w: 200, h: 300 })
+    let a = root.kids[0]
+    let b = root.kids[1]
+    assert_eq(a.box.x, 10)
+    assert_eq(a.box.y, 10)
+    assert_eq(a.box.w, 100)
+    assert_eq(a.box.h, 40)
+    assert_eq(b.box.y, 58)
+    assert_eq(b.box.h, 60)
+}
+
+fun test_row_grow_fills_leftover() {
+    let a = fixed(50, 30)
+    let b = flexible(30, 1)
+    let root = row([a, b]).gap(10)
+    measure(root, dummy_theme())
+    arrange(root, Rect { x: 0, y: 0, w: 200, h: 30 })
+    assert_eq(a.box.x, 0)
+    assert_eq(a.box.w, 50)
+    assert_eq(b.box.x, 60)
+    assert_eq(b.box.w, 140)
+}

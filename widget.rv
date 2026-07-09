@@ -1,0 +1,382 @@
+// quill's widget toolkit: a retained tree the framework measures, arranges with
+// a flex layout, and paints onto a Frame. Build a tree in view and hand it to
+// render:
+//
+//     import "github.com/martian56/quill/widget" { column, label, button, render }
+//
+//     fun view(m: Model, f: Frame) {
+//         render(f, m.theme, column([
+//             label("count: ${m.count}").size(28),
+//             button("inc", "Add one"),
+//         ]).pad(24).gap(16))
+//     }
+
+import "./lib" { Frame, Rect, Color, Font, Text, Theme }
+
+const BUTTON_PAD_X: Int = 16
+const BUTTON_PAD_Y: Int = 9
+const BUTTON_RADIUS: Int = 8
+
+// What a node is. Containers carry children; leaves carry their content.
+enum WidgetKind {
+    Column,
+    Row,
+    Panel,
+    Label(String),
+    Button(String, String),
+}
+
+// One node of the UI tree. Style is set with the chained modifiers below; mw/mh
+// and box are filled in by layout and read by paint.
+struct Widget {
+    kind: WidgetKind,
+    kids: List<Widget>,
+    flex: Int,
+    inset: Int,
+    spacing: Int,
+    fill: Color?,
+    corner: Int,
+    wfix: Int,
+    hfix: Int,
+    tsize: Int,
+    tint: Color?,
+    mw: Int,
+    mh: Int,
+    box: Rect,
+}
+
+fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
+    return Widget {
+        kind,
+        kids,
+        flex: 0,
+        inset: 0,
+        spacing: 0,
+        fill: None,
+        corner: 0,
+        wfix: -1,
+        hfix: -1,
+        tsize: 16,
+        tint: None,
+        mw: 0,
+        mh: 0,
+        box: Rect { x: 0, y: 0, w: 0, h: 0 },
+    }
+}
+
+fun _leaf(kind: WidgetKind) -> Widget {
+    let none: List<Widget> = []
+    return _widget(kind, none)
+}
+
+fun column(kids: List<Widget>) -> Widget {
+    return _widget(WidgetKind.Column, kids)
+}
+
+fun row(kids: List<Widget>) -> Widget {
+    return _widget(WidgetKind.Row, kids)
+}
+
+fun panel(child: Widget) -> Widget {
+    return _widget(WidgetKind.Panel, [child])
+}
+
+fun label(text: String) -> Widget {
+    return _leaf(WidgetKind.Label(text))
+}
+
+fun button(id: String, text: String) -> Widget {
+    return _leaf(WidgetKind.Button(id, text))
+}
+
+// Chained modifiers. Each mutates and returns the node, so they compose:
+// column([...]).pad(24).gap(16).bg(theme.surface).rounded(16).
+impl Widget {
+    fun grow(self, weight: Int) -> Widget {
+        self.flex = weight
+        return self
+    }
+
+    fun pad(self, n: Int) -> Widget {
+        self.inset = n
+        return self
+    }
+
+    fun gap(self, n: Int) -> Widget {
+        self.spacing = n
+        return self
+    }
+
+    fun bg(self, c: Color) -> Widget {
+        self.fill = Some(c)
+        return self
+    }
+
+    fun rounded(self, r: Int) -> Widget {
+        self.corner = r
+        return self
+    }
+
+    fun width(self, n: Int) -> Widget {
+        self.wfix = n
+        return self
+    }
+
+    fun height(self, n: Int) -> Widget {
+        self.hfix = n
+        return self
+    }
+
+    fun size(self, n: Int) -> Widget {
+        self.tsize = n
+        return self
+    }
+
+    fun color(self, c: Color) -> Widget {
+        self.tint = Some(c)
+        return self
+    }
+}
+
+fun _tint_or(w: Widget, fallback: Color) -> Color {
+    return match w.tint {
+        Some(c) -> c,
+        None -> fallback,
+    }
+}
+
+// Fill each child's desired size (mw, mh), bottom up.
+fun measure(w: Widget, theme: Theme) {
+    match w.kind {
+        Label(text) -> {
+            w.mw = theme.font.width(w.tsize, text)
+            w.mh = theme.font.line_height(w.tsize)
+        },
+        Button(id, text) -> {
+            w.mw = theme.font.width(w.tsize, text) + 2 * BUTTON_PAD_X
+            w.mh = theme.font.line_height(w.tsize) + 2 * BUTTON_PAD_Y
+        },
+        Column -> {
+            let total = 0
+            let cross = 0
+            let i = 0
+            while i < w.kids.len() {
+                let kid = w.kids[i]
+                measure(kid, theme)
+                total = total + kid.mh
+                if kid.mw > cross {
+                    cross = kid.mw
+                }
+                i = i + 1
+            }
+            total = total + _gaps(w.spacing, w.kids.len())
+            w.mw = cross + 2 * w.inset
+            w.mh = total + 2 * w.inset
+        },
+        Row -> {
+            let total = 0
+            let cross = 0
+            let i = 0
+            while i < w.kids.len() {
+                let kid = w.kids[i]
+                measure(kid, theme)
+                total = total + kid.mw
+                if kid.mh > cross {
+                    cross = kid.mh
+                }
+                i = i + 1
+            }
+            total = total + _gaps(w.spacing, w.kids.len())
+            w.mw = total + 2 * w.inset
+            w.mh = cross + 2 * w.inset
+        },
+        Panel -> {
+            let cw = 0
+            let ch = 0
+            if w.kids.len() > 0 {
+                let child = w.kids[0]
+                measure(child, theme)
+                cw = child.mw
+                ch = child.mh
+            }
+            w.mw = cw + 2 * w.inset
+            w.mh = ch + 2 * w.inset
+        },
+    }
+    if w.wfix >= 0 {
+        w.mw = w.wfix
+    }
+    if w.hfix >= 0 {
+        w.mh = w.hfix
+    }
+    return
+}
+
+fun _gaps(spacing: Int, n: Int) -> Int {
+    if n > 1 {
+        return spacing * (n - 1)
+    }
+    return 0
+}
+
+// Place w into box, then recurse into children.
+fun arrange(w: Widget, box: Rect) {
+    w.box = box
+    match w.kind {
+        Column -> {
+            _arrange_column(w, box.inset(w.inset))
+        },
+        Row -> {
+            _arrange_row(w, box.inset(w.inset))
+        },
+        Panel -> {
+            if w.kids.len() > 0 {
+                arrange(w.kids[0], box.inset(w.inset))
+            }
+        },
+        _ -> {},
+    }
+    return
+}
+
+fun _arrange_column(w: Widget, inner: Rect) {
+    let n = w.kids.len()
+    let fixed = 0
+    let flex_total = 0
+    let i = 0
+    while i < n {
+        let kid = w.kids[i]
+        if kid.flex == 0 {
+            fixed = fixed + kid.mh
+        } else {
+            flex_total = flex_total + kid.flex
+        }
+        i = i + 1
+    }
+    fixed = fixed + _gaps(w.spacing, n)
+    let leftover = inner.h - fixed
+    if leftover < 0 {
+        leftover = 0
+    }
+    let cursor = inner.y
+    i = 0
+    while i < n {
+        let kid = w.kids[i]
+        let kh = kid.mh
+        if kid.flex > 0 {
+            kh = _share(leftover, kid.flex, flex_total)
+        }
+        let kw = inner.w
+        if kid.wfix >= 0 {
+            kw = kid.wfix
+        }
+        arrange(kid, Rect { x: inner.x, y: cursor, w: kw, h: kh })
+        cursor = cursor + kh + w.spacing
+        i = i + 1
+    }
+    return
+}
+
+fun _arrange_row(w: Widget, inner: Rect) {
+    let n = w.kids.len()
+    let fixed = 0
+    let flex_total = 0
+    let i = 0
+    while i < n {
+        let kid = w.kids[i]
+        if kid.flex == 0 {
+            fixed = fixed + kid.mw
+        } else {
+            flex_total = flex_total + kid.flex
+        }
+        i = i + 1
+    }
+    fixed = fixed + _gaps(w.spacing, n)
+    let leftover = inner.w - fixed
+    if leftover < 0 {
+        leftover = 0
+    }
+    let cursor = inner.x
+    i = 0
+    while i < n {
+        let kid = w.kids[i]
+        let kw = kid.mw
+        if kid.flex > 0 {
+            kw = _share(leftover, kid.flex, flex_total)
+        }
+        let kh = inner.h
+        if kid.hfix >= 0 {
+            kh = kid.hfix
+        }
+        arrange(kid, Rect { x: cursor, y: inner.y, w: kw, h: kh })
+        cursor = cursor + kw + w.spacing
+        i = i + 1
+    }
+    return
+}
+
+fun _share(leftover: Int, weight: Int, total: Int) -> Int {
+    if total > 0 {
+        return leftover * weight / total
+    }
+    return 0
+}
+
+fun _paint_bg(w: Widget, f: Frame) {
+    match w.fill {
+        Some(c) -> {
+            if w.corner > 0 {
+                f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, w.corner, c)
+            } else {
+                f.rect(w.box.x, w.box.y, w.box.w, w.box.h, c)
+            }
+        },
+        None -> {},
+    }
+    return
+}
+
+// Walk the laid-out tree and draw it.
+fun paint(w: Widget, f: Frame, theme: Theme) {
+    match w.kind {
+        Label(text) -> {
+            _paint_bg(w, f)
+            let col = _tint_or(w, theme.text)
+            f.text(Text.new(theme.font, text).at(w.box.x, w.box.y).size(w.tsize).color(col))
+        },
+        Button(id, text) -> {
+            let bgc = _fill_or(w, theme.accent)
+            f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, BUTTON_RADIUS, bgc)
+            let tw = theme.font.width(w.tsize, text)
+            let lh = theme.font.line_height(w.tsize)
+            let tx = w.box.x + (w.box.w - tw) / 2
+            let ty = w.box.y + (w.box.h - lh) / 2
+            let col = _tint_or(w, theme.on_accent)
+            f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
+        },
+        _ -> {
+            _paint_bg(w, f)
+            let i = 0
+            while i < w.kids.len() {
+                paint(w.kids[i], f, theme)
+                i = i + 1
+            }
+        },
+    }
+    return
+}
+
+fun _fill_or(w: Widget, fallback: Color) -> Color {
+    return match w.fill {
+        Some(c) -> c,
+        None -> fallback,
+    }
+}
+
+// Lay a tree out to fill the frame and paint it. Call this from a view.
+fun render(f: Frame, theme: Theme, root: Widget) {
+    measure(root, theme)
+    arrange(root, Rect { x: 0, y: 0, w: f.width, h: f.height })
+    paint(root, f, theme)
+    return
+}

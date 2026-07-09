@@ -101,3 +101,14 @@ int64_t q_measure_width(int64_t font, int64_t px, const char *str) {
     float w = fonsTextBounds(g_fons, 0.0f, 0.0f, str, NULL, NULL);
     return (int64_t)(w + 0.5f);
 }
+
+int64_t q_line_height(int64_t font, int64_t px) {
+    if (g_fons == NULL || font < 0) {
+        return px;
+    }
+    fonsSetFont(g_fons, (int)font);
+    fonsSetSize(g_fons, (float)px);
+    float asc, desc, lh;
+    fonsVertMetrics(g_fons, &asc, &desc, &lh);
+    return (int64_t)(lh + 0.5f);
+}
