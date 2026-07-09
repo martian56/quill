@@ -4,6 +4,7 @@
 import "./lib" { Frame, Rect, Color, Text, Theme }
 import "./widget" { Widget, WidgetKind, _contains }
 import "./layout" { measure, arrange }
+import std/string
 
 const BUTTON_RADIUS: Int = 8
 const INPUT_PAD_X: Int = 12
@@ -20,10 +21,11 @@ struct Interaction {
     down: Bool,
     focus: String?,
     caret_on: Bool,
+    caret_pos: Int,
 }
 
 fun _inert() -> Interaction {
-    return Interaction { x: -1, y: -1, down: false, focus: None, caret_on: true }
+    return Interaction { x: -1, y: -1, down: false, focus: None, caret_on: true, caret_pos: 0 }
 }
 
 fun _tint_or(w: Widget, fallback: Color) -> Color {
@@ -99,7 +101,7 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
             f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
         },
         Input(id, value) -> {
-            _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on)
+            _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on, it.caret_pos)
         },
         Checkbox(id, checked, text) -> {
             _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
@@ -217,7 +219,15 @@ fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: Int, lo: Int, hi: In
     return
 }
 
-fun _paint_input(w: Widget, f: Frame, theme: Theme, value: String, focused: Bool, caret_on: Bool) {
+fun _paint_input(
+    w: Widget,
+    f: Frame,
+    theme: Theme,
+    value: String,
+    focused: Bool,
+    caret_on: Bool,
+    caret_pos: Int,
+) {
     let border = theme.field
     if focused {
         border = theme.accent
@@ -236,7 +246,11 @@ fun _paint_input(w: Widget, f: Frame, theme: Theme, value: String, focused: Bool
     let ty = w.box.y + (w.box.h - lh) / 2
     f.text(Text.new(theme.font, value).at(tx, ty).size(w.tsize).color(theme.text))
     if focused && caret_on {
-        let caret = tx + theme.font.width(w.tsize, value) + 1
+        let cp = caret_pos
+        if cp > value.length() {
+            cp = value.length()
+        }
+        let caret = tx + theme.font.width(w.tsize, value.substring(0, cp)) + 1
         f.rect(caret, ty, 2, lh, theme.accent)
     }
     return

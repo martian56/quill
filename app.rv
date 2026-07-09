@@ -27,8 +27,72 @@ const KEY_ESCAPE: Int = 256
 const KEY_ENTER: Int = 257
 const KEY_TAB: Int = 258
 const KEY_BACKSPACE: Int = 259
+const KEY_RIGHT: Int = 262
+const KEY_LEFT: Int = 263
+const KEY_DELETE: Int = 261
+const KEY_HOME: Int = 268
+const KEY_END: Int = 269
 const KEY_C: Int = 67
 const KEY_V: Int = 86
+
+fun _is_cont(b: Int) -> Bool {
+    return b >= 128 && b < 192
+}
+
+// Byte index of the character boundary before i (skipping UTF-8 continuations).
+fun _prev_char(s: String, i: Int) -> Int {
+    if i <= 0 {
+        return 0
+    }
+    let c = i - 1
+    let scanning = true
+    while scanning {
+        if c == 0 {
+            scanning = false
+        } else {
+            if _is_cont(s.byte_at(c)) {
+                c = c - 1
+            } else {
+                scanning = false
+            }
+        }
+    }
+    return c
+}
+
+// Byte index of the character boundary after i.
+fun _next_char(s: String, i: Int) -> Int {
+    let n = s.length()
+    if i >= n {
+        return n
+    }
+    let c = i + 1
+    let scanning = true
+    while scanning {
+        if c >= n {
+            scanning = false
+        } else {
+            if _is_cont(s.byte_at(c)) {
+                c = c + 1
+            } else {
+                scanning = false
+            }
+        }
+    }
+    return c
+}
+
+// Replace the byte range [start, end) of s with ins.
+fun _splice(s: String, start: Int, end: Int, ins: String) -> String {
+    return s.substring(0, start).concat(ins).concat(s.substring(end, s.length()))
+}
+
+fun _value_len(tree: Widget, id: String) -> Int {
+    return match _find_input_value(tree, id) {
+        Some(v) -> v.length(),
+        None -> 0,
+    }
+}
 
 // The key callback packs modifier bits above the key code; Control is bit 1.
 fun _key_code(packed: Int) -> Int {
@@ -89,12 +153,13 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
 
     let offsets = empty_map<String, Int>()
     let model = (app.init)()
-    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None, offsets)
+    let last = _draw(win, view_fn, theme_of, model, -1, -1, false, None, offsets, 0)
 
     let was_down = false
     let pressed: String? = None
     let focused: String? = None
     let dragging: String? = None
+    let caret = 0
     let running = true
     while running {
         win.wait(_idle_timeout(focused))
@@ -116,6 +181,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
                     } else {
                         if h.input {
                             focused = Some(h.id)
+                            caret = _value_len(last, h.id)
                             pressed = None
                         } else {
                             pressed = Some(h.id)
@@ -144,12 +210,13 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         }
         was_down = down
 
-        let outcome = _handle_input(model, update_fn, win, last, focused)
+        let outcome = _handle_input(model, update_fn, win, last, focused, caret)
         model = outcome.model
         focused = outcome.focused
+        caret = outcome.caret
         model = update_fn(model, UiEvent.Tick)
 
-        last = _draw(win, view_fn, theme_of, model, mx, my, down, focused, offsets)
+        last = _draw(win, view_fn, theme_of, model, mx, my, down, focused, offsets, caret)
     }
 
     win.close()
@@ -201,6 +268,7 @@ fun _draw<M>(
     down: Bool,
     focused: String?,
     offsets: Map<String, Int>,
+    caret: Int,
 ) -> Widget {
     let theme = theme_of(model)
     let tree = view_fn(model)
@@ -209,7 +277,12 @@ fun _draw<M>(
     let f = win.begin()
     f.clear(theme.bg)
     let caret_on = (win.time_ms() / 530) % 2 == 0
-    paint(tree, f, theme, Interaction { x: mx, y: my, down, focus: focused, caret_on })
+    paint(
+        tree,
+        f,
+        theme,
+        Interaction { x: mx, y: my, down, focus: focused, caret_on, caret_pos: caret },
+    )
     win.present()
     return tree
 }
@@ -245,23 +318,33 @@ fun _hit_id(w: Widget, x: Int, y: Int) -> String? {
     }
 }
 
-// What input handling produced: the folded model and the (possibly changed)
-// focus after Tab or Escape.
+// What input handling produced: the folded model, the (possibly changed) focus,
+// and the caret's byte offset in the focused field.
 struct InputOutcome<M> {
     model: M,
     focused: String?,
+    caret: Int,
 }
 
-// Drain this frame's typed characters and keys: printable text and backspace
-// edit the focused field (one Input event), Enter submits it, Tab moves focus to
-// the next field, and Escape blurs. Keys are drained even when nothing is focused
-// so the queues do not pile up.
+fun _foc_len(tree: Widget, f: String?) -> Int {
+    return match f {
+        Some(id) -> _value_len(tree, id),
+        None -> 0,
+    }
+}
+
+// Drain this frame's typed characters and keys, editing the focused field at the
+// caret: printable text inserts, Backspace/Delete remove around it, arrows and
+// Home/End move it, Ctrl+V pastes and Ctrl+C copies. Enter submits, Tab moves
+// focus, Escape blurs. Keys are drained even with no focus so queues do not pile
+// up. Returns one Input event with the new value plus the moved caret.
 fun _handle_input<M>(
     model: M,
     update_fn: fun(M, UiEvent) -> M,
     win: Window,
     last: Widget,
     focused: String?,
+    caret: Int,
 ) -> InputOutcome<M> {
     let has_focus = false
     let cur = ""
@@ -277,12 +360,20 @@ fun _handle_input<M>(
         },
         None -> {},
     }
+    if caret > cur.length() {
+        caret = cur.length()
+    }
+    if caret < 0 {
+        caret = 0
+    }
 
     let changed = false
     let c = win.poll_char()
     while c >= 0 {
         if c >= 32 && has_focus {
-            cur = cur.concat(win.char_utf8(c))
+            let t = win.char_utf8(c)
+            cur = _splice(cur, caret, caret, t)
+            caret = caret + t.length()
             changed = true
         }
         c = win.poll_char()
@@ -293,15 +384,46 @@ fun _handle_input<M>(
     while k >= 0 {
         let key = _key_code(k)
         let ctrl = _ctrl(k)
-        if key == KEY_BACKSPACE && has_focus {
-            cur = _drop_last(cur)
-            changed = true
+        if has_focus {
+            if key == KEY_BACKSPACE && caret > 0 {
+                let p = _prev_char(cur, caret)
+                cur = _splice(cur, p, caret, "")
+                caret = p
+                changed = true
+            }
+            if key == KEY_DELETE && caret < cur.length() {
+                let nx = _next_char(cur, caret)
+                cur = _splice(cur, caret, nx, "")
+                changed = true
+            }
+            if key == KEY_LEFT {
+                caret = _prev_char(cur, caret)
+            }
+            if key == KEY_RIGHT {
+                caret = _next_char(cur, caret)
+            }
+            if key == KEY_HOME {
+                caret = 0
+            }
+            if key == KEY_END {
+                caret = cur.length()
+            }
+            if ctrl && key == KEY_V {
+                let clip = win.clipboard()
+                cur = _splice(cur, caret, caret, clip)
+                caret = caret + clip.length()
+                changed = true
+            }
+            if ctrl && key == KEY_C {
+                win.set_clipboard(cur)
+            }
         }
         if key == KEY_ESCAPE {
             next_focus = None
         }
         if key == KEY_TAB {
             next_focus = _next_focus(last, next_focus)
+            caret = _foc_len(last, next_focus)
         }
         if key == KEY_ENTER {
             match focused {
@@ -310,13 +432,6 @@ fun _handle_input<M>(
                 },
                 None -> {},
             }
-        }
-        if ctrl && key == KEY_V && has_focus {
-            cur = cur.concat(win.clipboard())
-            changed = true
-        }
-        if ctrl && key == KEY_C && has_focus {
-            win.set_clipboard(cur)
         }
         k = win.poll_key()
     }
@@ -329,7 +444,7 @@ fun _handle_input<M>(
             None -> {},
         }
     }
-    return InputOutcome { model, focused: next_focus }
+    return InputOutcome { model, focused: next_focus, caret }
 }
 
 fun _dispatch_click<M>(
