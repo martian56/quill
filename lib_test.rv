@@ -1,0 +1,7 @@
+import std/test { assert_true }
+import "./lib" { init, terminate }
+
+fun test_glfw_initializes() {
+    assert_true(init())
+    terminate()
+}

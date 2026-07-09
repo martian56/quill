@@ -3,6 +3,6 @@ name = "quill"
 version = "0.0.0"
 edition = "v2"
 
-# A native window, GPU renderer, and text come from a C backend linked through
-# Raven's FFI. The [ffi] section (bundled C shim + the windowing/GPU library)
-# is added once the backend is chosen.
+[ffi]
+sources = ["c/glfw_unity.c", "c/glfw_null.c"]
+libs = ["gdi32", "user32", "shell32", "opengl32"]

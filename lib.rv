@@ -1,0 +1,13 @@
+extern "C" {
+    fun glfwInit() -> Int
+    fun glfwTerminate()
+}
+
+fun init() -> Bool {
+    return glfwInit() == 1
+}
+
+fun terminate() {
+    glfwTerminate()
+    return
+}
