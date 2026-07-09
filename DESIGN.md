@@ -182,11 +182,15 @@ styling work.
    flex measure/arrange pass and `label`, `button`, `panel`, `row`, `column`
    plus chained modifiers; `render` paints a tree onto a Frame. The counter
    example renders and layout is unit-tested.
-4. **Events + input.** Hit-testing, hover/press/click dispatch, `text_input`
-   with a caret, focus, keyboard (polled from GLFW state). The counter example
-   is interactive.
-5. **Theme + polish.** Tokens, light/dark, `scroll`, DPI, and a couple of
-   showcase examples. Cut `v0.1.0`.
+4. **Events + input.** Mouse DONE: `run_ui` polls the cursor and button, hit-tests
+   the laid-out tree, and dispatches `Click(id)`/`Tick` into a `UiApp` update, with
+   hover/press feedback; the counter is interactive. Remaining: keyboard focus and
+   `text_input` with a caret.
+5. **Theme + polish.** Tokens, light/dark, `scroll`, DPI awareness (today the
+   window is not DPI-aware, so at 125% scaling the framebuffer is 960x600 inside a
+   768x480 client; the cursor is scaled to match, but native-resolution rendering
+   wants a per-monitor-aware process), and a couple of showcase examples. Cut
+   `v0.1.0`.
 
 ## Testing
 
