@@ -1,5 +1,5 @@
 import "../lib" { Font, Color, Image, Theme, WindowConfig }
-import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, slider, image }
+import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, checkbox, slider, image, divider }
 import "../app" { UiApp, UiEvent, run_ui }
 import std/string
 
@@ -177,7 +177,8 @@ fun sidebar(m: Model) -> Widget {
                 ).gap(8),
                 label("flex layout and alignment").size(15).color(m.theme.muted),
                 label("text, input, keyboard").size(15).color(m.theme.muted),
-                label("scrolling and modals").size(15).color(m.theme.muted),
+                label("scrolling, modals, images").size(15).color(m.theme.muted),
+                divider(),
                 checkbox("show_count", m.show_count, "Show item count").size(16),
                 checkbox("theme", m.dark, "Dark theme").size(16),
                 label("Text size: ${m.item_size}").size(15).color(m.theme.muted),

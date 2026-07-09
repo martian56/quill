@@ -126,6 +126,7 @@ struct Theme {
     muted: Color,
     accent: Color,
     on_accent: Color,
+    border: Color,
 }
 
 impl Theme {
@@ -139,6 +140,7 @@ impl Theme {
             muted: Color.rgb(150, 160, 175),
             accent: Color.rgb(90, 140, 240),
             on_accent: Color.rgb(245, 247, 252),
+            border: Color.rgb(52, 58, 70),
         }
     }
 
@@ -152,6 +154,7 @@ impl Theme {
             muted: Color.rgb(110, 118, 130),
             accent: Color.rgb(58, 118, 228),
             on_accent: Color.rgb(255, 255, 255),
+            border: Color.rgb(223, 227, 233),
         }
     }
 }

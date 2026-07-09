@@ -58,6 +58,7 @@ enum WidgetKind {
     Checkbox(String, Bool, String),
     Slider(String, Int, Int, Int),
     Image(Int, Int, Int),
+    Divider,
     Modal(String),
 }
 
@@ -167,6 +168,11 @@ fun image(handle: Int, w: Int, h: Int) -> Widget {
     return _leaf(WidgetKind.Image(handle, w, h))
 }
 
+// A thin horizontal rule that stretches across its container.
+fun divider() -> Widget {
+    return _leaf(WidgetKind.Divider)
+}
+
 // Chained modifiers. Each mutates and returns the node, so they compose:
 // column([...]).pad(24).gap(16).bg(theme.surface).rounded(16).
 impl Widget {
@@ -266,6 +272,10 @@ fun measure(w: Widget, theme: Theme) {
         Image(handle, iw, ih) -> {
             w.mw = iw
             w.mh = ih
+        },
+        Divider -> {
+            w.mw = 0
+            w.mh = 1
         },
         Column -> {
             let total = 0
@@ -619,6 +629,9 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         },
         Image(handle, iw, ih) -> {
             f.image(handle, w.box.x, w.box.y, w.box.w, w.box.h)
+        },
+        Divider -> {
+            f.rect(w.box.x, w.box.y, w.box.w, 1, theme.border)
         },
         Scroll(id) -> {
             _paint_bg(w, f)
