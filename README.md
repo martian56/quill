@@ -25,6 +25,10 @@ Apps built with the toolkit. More will land here as we build them.
 
 ![A chat app built with quill](assets/chat.png)
 
+**An analytics dashboard** (KPI tiles, charts, tables):
+
+![An analytics dashboard built with quill](assets/dashboard.png)
+
 ## Install
 
 Add quill to your `rv.toml`:
