@@ -578,6 +578,29 @@ fun _slider_value_at(w: Widget, id: String, x: Int) -> Int? {
     return None
 }
 
+// The input widget with this id, if present (carries its box for click-to-caret).
+fun _find_input(w: Widget, id: String) -> Widget? {
+    match w.kind {
+        Input(iid, value) -> {
+            if iid == id {
+                return Some(w)
+            }
+        },
+        _ -> {},
+    }
+    let i = 0
+    while i < w.kids.len() {
+        match _find_input(w.kids[i], id) {
+            Some(inp) -> {
+                return Some(inp)
+            },
+            None -> {},
+        }
+        i = i + 1
+    }
+    return None
+}
+
 // The current text of the input with this id, if present in the tree.
 fun _find_input_value(w: Widget, id: String) -> String? {
     match w.kind {

@@ -30,10 +30,19 @@ struct Interaction {
     focus: String?,
     caret_on: Bool,
     caret_pos: Int,
+    sel_anchor: Int,
 }
 
 fun _inert() -> Interaction {
-    return Interaction { x: -1, y: -1, down: false, focus: None, caret_on: true, caret_pos: 0 }
+    return Interaction {
+        x: -1,
+        y: -1,
+        down: false,
+        focus: None,
+        caret_on: true,
+        caret_pos: 0,
+        sel_anchor: 0,
+    }
 }
 
 fun _tint_or(w: Widget, fallback: Color) -> Color {
@@ -109,7 +118,16 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
             f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
         },
         Input(id, value) -> {
-            _paint_input(w, f, theme, value, _is_focused(it, id), it.caret_on, it.caret_pos)
+            _paint_input(
+                w,
+                f,
+                theme,
+                value,
+                _is_focused(it, id),
+                it.caret_on,
+                it.caret_pos,
+                it.sel_anchor,
+            )
         },
         Checkbox(id, checked, text) -> {
             _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
@@ -230,6 +248,16 @@ fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: Int, lo: Int, hi: In
     return
 }
 
+fun _clamp(n: Int, hi: Int) -> Int {
+    if n < 0 {
+        return 0
+    }
+    if n > hi {
+        return hi
+    }
+    return n
+}
+
 fun _paint_input(
     w: Widget,
     f: Frame,
@@ -238,6 +266,7 @@ fun _paint_input(
     focused: Bool,
     caret_on: Bool,
     caret_pos: Int,
+    sel_anchor: Int,
 ) {
     let border = theme.field
     if focused {
@@ -255,16 +284,78 @@ fun _paint_input(
     let lh = theme.font.line_height(w.tsize)
     let tx = w.box.x + INPUT_PAD_X
     let ty = w.box.y + (w.box.h - lh) / 2
+    // A selection draws behind the text as a translucent accent band.
+    let cp = _clamp(caret_pos, value.length())
+    let an = _clamp(sel_anchor, value.length())
+    if focused && an != cp {
+        let lo = an
+        let hi = cp
+        if lo > hi {
+            lo = cp
+            hi = an
+        }
+        let sx = tx + theme.font.width(w.tsize, value.substring(0, lo))
+        let ex = tx + theme.font.width(w.tsize, value.substring(0, hi))
+        f.rect_alpha(sx, ty, ex - sx, lh, theme.accent, 110)
+    }
     f.text(Text.new(theme.font, value).at(tx, ty).size(w.tsize).color(theme.text))
     if focused && caret_on {
-        let cp = caret_pos
-        if cp > value.length() {
-            cp = value.length()
-        }
         let caret = tx + theme.font.width(w.tsize, value.substring(0, cp)) + 1
         f.rect(caret, ty, 2, lh, theme.accent)
     }
     return
+}
+
+// Byte offset in an input's text nearest to cursor x, for click-to-place-caret
+// and drag selection. Returns 0 for a click left of the text.
+fun caret_index_at(w: Widget, theme: Theme, x: Int) -> Int {
+    return match w.kind {
+        Input(id, value) -> _input_caret(w, theme, value, x),
+        _ -> 0,
+    }
+}
+
+fun _input_caret(w: Widget, theme: Theme, value: String, x: Int) -> Int {
+    let tx = w.box.x + INPUT_PAD_X
+    let rel = x - tx
+    if rel <= 0 {
+        return 0
+    }
+    let i = 0
+    let prev = 0
+    while i < value.length() {
+        let nx = _next_boundary(value, i)
+        let cw = theme.font.width(w.tsize, value.substring(0, nx))
+        if rel < (prev + cw) / 2 {
+            return i
+        }
+        prev = cw
+        i = nx
+    }
+    return value.length()
+}
+
+// Byte index of the character boundary after i, skipping UTF-8 continuations.
+fun _next_boundary(s: String, i: Int) -> Int {
+    let n = s.length()
+    if i >= n {
+        return n
+    }
+    let c = i + 1
+    let scanning = true
+    while scanning {
+        if c >= n {
+            scanning = false
+        } else {
+            let b = s.byte_at(c)
+            if b >= 128 && b < 192 {
+                c = c + 1
+            } else {
+                scanning = false
+            }
+        }
+    }
+    return c
 }
 
 fun _paint_dropdown(w: Widget, f: Frame, theme: Theme, selected: String, hovered: Bool) {
