@@ -195,10 +195,10 @@ styling work.
    loop drains into the focused input; the caret and hover/press feedback render.
    The counter and a text field are interactive.
 5. **Theme + polish.** IN PROGRESS. Done: an event-driven idle loop (zero CPU when
-   static), a `scroll` container, a `checkbox`, input focus rings, and the todo
-   showcase. Remaining before `v0.1.0`: layout alignment (center/end/space-between),
-   a light theme, keyboard navigation (Tab/Enter/Esc, caret movement, selection,
-   clipboard), and more widgets (radio, slider, dropdown, tabs, divider, modal).
+   static), a `scroll` container, a `checkbox`, input focus rings, layout alignment
+   (`align`/`justify`), and keyboard navigation (Enter submit, Tab focus, Escape
+   blur). Remaining before `v0.1.0`: caret movement + text selection + clipboard, a
+   light theme, and more widgets (radio, slider, dropdown, tabs, divider, modal).
    (DPI is already handled: GLFW makes the process per-monitor aware, so the
    framebuffer is native resolution and the cursor is scaled to match it.)
 
