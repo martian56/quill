@@ -162,6 +162,7 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
     let dragging: String? = None
     let open_dd: String? = None
     let caret = 0
+    let last_cursor = -1
     let running = true
     while running {
         win.wait(_idle_timeout(focused))
@@ -253,6 +254,23 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
             dragging = None
         }
         was_down = down
+
+        // Reflect what is under the cursor: I-beam over inputs, hand over others.
+        let cur_kind = 0
+        match _hit(last, mx, my) {
+            Some(h) -> {
+                if h.input {
+                    cur_kind = 1
+                } else {
+                    cur_kind = 2
+                }
+            },
+            None -> {},
+        }
+        if cur_kind != last_cursor {
+            win.cursor(cur_kind)
+            last_cursor = cur_kind
+        }
 
         let outcome = _handle_input(model, update_fn, win, last, focused, caret)
         model = outcome.model

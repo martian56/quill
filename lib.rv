@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, take_scroll_y, wait_events, time_ms, poll_char, poll_key, char_utf8, clipboard_get, clipboard_set, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height, image_load, image_width, image_height, draw_image }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, take_scroll_y, wait_events, time_ms, set_cursor, poll_char, poll_key, char_utf8, clipboard_get, clipboard_set, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height, image_load, image_width, image_height, draw_image }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -447,6 +447,12 @@ impl Window {
     // then process input. Lets an idle app rest instead of spinning.
     fun wait(self, timeout_ms: Int) {
         wait_events(timeout_ms)
+        return
+    }
+
+    // Set the mouse cursor shape: 0 arrow, 1 I-beam, 2 hand.
+    fun cursor(self, kind: Int) {
+        set_cursor(self.handle, kind)
         return
     }
 

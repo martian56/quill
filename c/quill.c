@@ -165,6 +165,27 @@ int64_t q_time_ms(void) {
     return (int64_t)(glfwGetTime() * 1000.0);
 }
 
+// Set the mouse cursor shape: 0 arrow, 1 I-beam (text), 2 hand (clickable).
+static GLFWcursor *cur_arrow;
+static GLFWcursor *cur_ibeam;
+static GLFWcursor *cur_hand;
+
+void q_set_cursor(int64_t win, int64_t kind) {
+    if (cur_arrow == NULL) {
+        cur_arrow = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+        cur_ibeam = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+        cur_hand = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+    }
+    GLFWcursor *c = cur_arrow;
+    if (kind == 1) {
+        c = cur_ibeam;
+    }
+    if (kind == 2) {
+        c = cur_hand;
+    }
+    glfwSetCursor(WIN(win), c);
+}
+
 void q_window_swap(int64_t win) {
     glfwSwapBuffers(WIN(win));
 }
