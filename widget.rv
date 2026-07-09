@@ -11,7 +11,7 @@
 //         ]).pad(24).gap(16))
 //     }
 
-import "./lib" { Frame, Rect, Color, Font, Text, Theme, Window, WindowConfig, start, stop }
+import "./lib" { Frame, Rect, Color, Text, Theme }
 import std/string
 
 const BUTTON_PAD_X: Int = 16
@@ -21,7 +21,6 @@ const INPUT_PAD_X: Int = 12
 const INPUT_PAD_Y: Int = 9
 const INPUT_RADIUS: Int = 8
 const INPUT_MIN_W: Int = 160
-const KEY_BACKSPACE: Int = 259
 
 // What a node is. Containers carry children; leaves carry their content. Button
 // and Input carry an id; Input also carries its current text.
@@ -528,203 +527,10 @@ fun _fill_or(w: Widget, fallback: Color) -> Color {
 }
 
 // Lay a tree out to fill the frame and paint it. Call this from a view when
-// driving the core loop yourself; run_ui handles interaction for you.
+// driving the core loop yourself; run_ui (in the app module) does it for you.
 fun render(f: Frame, theme: Theme, root: Widget) {
     measure(root, theme)
     arrange(root, Rect { x: 0, y: 0, w: f.width, h: f.height })
     paint(root, f, theme, _inert())
     return
-}
-
-// What a widget app's update reacts to. Click carries the id of the button
-// pressed and released over the same spot. Input carries a focused field's id
-// and its new text after typing or backspace.
-enum UiEvent {
-    Tick,
-    Click(String),
-    Input(String, String),
-}
-
-// A widget application: view returns a tree, update folds events into the model,
-// and theme reads the palette from the model (it holds the loaded font).
-struct UiApp<M> {
-    init: fun() -> M,
-    update: fun(M, UiEvent) -> M,
-    view: fun(M) -> Widget,
-    theme: fun(M) -> Theme,
-    window: WindowConfig,
-}
-
-fun _layout(tree: Widget, theme: Theme, win: Window) {
-    measure(tree, theme)
-    arrange(tree, Rect { x: 0, y: 0, w: win.width(), h: win.height() })
-    return
-}
-
-// Open the window and run the widget app: poll the mouse, hit-test the laid-out
-// tree, dispatch Click and Tick into update, and paint each frame with hover and
-// press feedback. Returns false if the backend cannot start.
-fun run_ui<M>(app: UiApp<M>) -> Bool {
-    if !start() {
-        return false
-    }
-    let win = Window.open(app.window)
-    if !win.ok() {
-        stop()
-        return false
-    }
-
-    let init_fn = app.init
-    let update_fn = app.update
-    let view_fn = app.view
-    let theme_of = app.theme
-
-    let model = init_fn()
-    let last = view_fn(model)
-    _layout(last, theme_of(model), win)
-
-    let was_down = false
-    let pressed: String? = None
-    let focused: String? = None
-    let running = true
-    while running {
-        if win.should_close() {
-            running = false
-        }
-        let mx = win.mouse_x()
-        let my = win.mouse_y()
-        let down = win.mouse_down()
-        if down && !was_down {
-            match _hit(last, mx, my) {
-                Some(h) -> {
-                    if h.input {
-                        focused = Some(h.id)
-                        pressed = None
-                    } else {
-                        pressed = Some(h.id)
-                        focused = None
-                    }
-                },
-                None -> {
-                    pressed = None
-                    focused = None
-                },
-            }
-        }
-        if was_down && !down {
-            model = _dispatch_click(model, update_fn, pressed, _hit_id(last, mx, my))
-            pressed = None
-        }
-        was_down = down
-
-        model = _drain_input(model, update_fn, win, last, focused)
-        model = update_fn(model, UiEvent.Tick)
-
-        let theme = theme_of(model)
-        let tree = view_fn(model)
-        _layout(tree, theme, win)
-        let f = win.begin()
-        f.clear(theme.bg)
-        paint(tree, f, theme, Interaction { x: mx, y: my, down, focus: focused })
-        win.present()
-        last = tree
-    }
-
-    win.close()
-    stop()
-    return true
-}
-
-// The id of a button under (x, y), ignoring inputs, for click release matching.
-fun _hit_id(w: Widget, x: Int, y: Int) -> String? {
-    return match _hit(w, x, y) {
-        Some(h) -> {
-            if h.input {
-                None
-            } else {
-                Some(h.id)
-            }
-        },
-        None -> None,
-    }
-}
-
-// Fold this frame's typed characters and backspaces into the focused input as a
-// single Input event carrying the new value.
-fun _drain_input<M>(
-    model: M,
-    update_fn: fun(M, UiEvent) -> M,
-    win: Window,
-    last: Widget,
-    focused: String?,
-) -> M {
-    match focused {
-        Some(fid) -> {
-            let cur = match _find_input_value(last, fid) {
-                Some(v) -> v,
-                None -> "",
-            }
-            let changed = false
-            let c = win.poll_char()
-            while c >= 0 {
-                if c >= 32 {
-                    cur = cur.concat(win.char_utf8(c))
-                    changed = true
-                }
-                c = win.poll_char()
-            }
-            let k = win.poll_key()
-            while k >= 0 {
-                if k == KEY_BACKSPACE {
-                    cur = _drop_last(cur)
-                    changed = true
-                }
-                k = win.poll_key()
-            }
-            if changed {
-                return update_fn(model, UiEvent.Input(fid, cur))
-            }
-            return model
-        },
-        None -> {
-            _flush_input(win)
-            return model
-        },
-    }
-    return model
-}
-
-// Empty the input queues when nothing is focused, so keys do not pile up.
-fun _flush_input(win: Window) {
-    let c = win.poll_char()
-    while c >= 0 {
-        c = win.poll_char()
-    }
-    let k = win.poll_key()
-    while k >= 0 {
-        k = win.poll_key()
-    }
-    return
-}
-
-fun _dispatch_click<M>(
-    model: M,
-    update_fn: fun(M, UiEvent) -> M,
-    pressed: String?,
-    released: String?,
-) -> M {
-    match pressed {
-        Some(pid) -> {
-            match released {
-                Some(rid) -> {
-                    if pid == rid {
-                        return update_fn(model, UiEvent.Click(pid))
-                    }
-                },
-                None -> {},
-            }
-        },
-        None -> {},
-    }
-    return model
 }

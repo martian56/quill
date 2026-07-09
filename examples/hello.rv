@@ -1,5 +1,6 @@
 import "../lib" { Font, Theme, WindowConfig }
-import "../widget" { Widget, UiEvent, UiApp, column, row, panel, label, button, input, run_ui }
+import "../widget" { Widget, column, row, panel, label, button, input }
+import "../app" { UiEvent, UiApp, run_ui }
 
 struct Model {
     count: Int,
