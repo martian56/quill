@@ -735,6 +735,53 @@ fun _scroll_extent(w: Widget) -> Int {
     return max_off
 }
 
+// Every input id in tree (tab) order.
+fun _focusables(w: Widget) -> List<String> {
+    let out: List<String> = []
+    _collect_focusables(w, out)
+    return out
+}
+
+fun _collect_focusables(w: Widget, out: List<String>) {
+    match w.kind {
+        Input(id, value) -> {
+            out.push(id)
+        },
+        _ -> {},
+    }
+    let i = 0
+    while i < w.kids.len() {
+        _collect_focusables(w.kids[i], out)
+        i = i + 1
+    }
+    return
+}
+
+// The input to focus after current when Tab is pressed, wrapping around; the
+// first input when nothing is focused, or None when there are no inputs.
+fun _next_focus(w: Widget, current: String?) -> String? {
+    let ids = _focusables(w)
+    if ids.len() == 0 {
+        return None
+    }
+    match current {
+        Some(cur) -> {
+            let i = 0
+            while i < ids.len() {
+                if ids[i] == cur {
+                    return Some(ids[(i + 1) % ids.len()])
+                }
+                i = i + 1
+            }
+            return Some(ids[0])
+        },
+        None -> {
+            return Some(ids[0])
+        },
+    }
+    return None
+}
+
 // The current text of the input with this id, if present in the tree.
 fun _find_input_value(w: Widget, id: String) -> String? {
     match w.kind {

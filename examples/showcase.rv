@@ -83,10 +83,18 @@ fun _on_input(m: Model, id: String, s: String) -> Model {
     return m
 }
 
+fun _on_submit(m: Model, id: String) -> Model {
+    if id == "draft" {
+        return _on_click(m, "add")
+    }
+    return m
+}
+
 fun showcase_update(m: Model, e: UiEvent) -> Model {
     return match e {
         Click(id) -> _on_click(m, id),
         Input(id, s) -> _on_input(m, id, s),
+        Submit(id) -> _on_submit(m, id),
         Tick -> m,
     }
 }

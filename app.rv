@@ -17,10 +17,13 @@
 //     }
 
 import "./lib" { Theme, Rect, Window, WindowConfig, start, stop }
-import "./widget" { Widget, Interaction, measure, arrange, paint, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent }
+import "./widget" { Widget, Interaction, measure, arrange, paint, _hit, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus }
 import std/string
 import std/collections { Map, empty_map }
 
+const KEY_ESCAPE: Int = 256
+const KEY_ENTER: Int = 257
+const KEY_TAB: Int = 258
 const KEY_BACKSPACE: Int = 259
 
 // What a widget app's update reacts to. Click carries the id of the button
@@ -30,6 +33,7 @@ enum UiEvent {
     Tick,
     Click(String),
     Input(String, String),
+    Submit(String),
 }
 
 // A widget application: view returns a tree, update folds events into the model,
@@ -108,7 +112,9 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         }
         was_down = down
 
-        model = _drain_input(model, update_fn, win, last, focused)
+        let outcome = _handle_input(model, update_fn, win, last, focused)
+        model = outcome.model
+        focused = outcome.focused
         model = update_fn(model, UiEvent.Tick)
 
         last = _draw(win, view_fn, theme_of, model, mx, my, down, focused, offsets)
@@ -190,62 +196,82 @@ fun _hit_id(w: Widget, x: Int, y: Int) -> String? {
     }
 }
 
-// Fold this frame's typed characters and backspaces into the focused input as a
-// single Input event carrying the new value.
-fun _drain_input<M>(
+// What input handling produced: the folded model and the (possibly changed)
+// focus after Tab or Escape.
+struct InputOutcome<M> {
+    model: M,
+    focused: String?,
+}
+
+// Drain this frame's typed characters and keys: printable text and backspace
+// edit the focused field (one Input event), Enter submits it, Tab moves focus to
+// the next field, and Escape blurs. Keys are drained even when nothing is focused
+// so the queues do not pile up.
+fun _handle_input<M>(
     model: M,
     update_fn: fun(M, UiEvent) -> M,
     win: Window,
     last: Widget,
     focused: String?,
-) -> M {
+) -> InputOutcome<M> {
+    let has_focus = false
+    let cur = ""
     match focused {
         Some(fid) -> {
-            let cur = match _find_input_value(last, fid) {
-                Some(v) -> v,
-                None -> "",
+            has_focus = true
+            match _find_input_value(last, fid) {
+                Some(v) -> {
+                    cur = v
+                },
+                None -> {},
             }
-            let changed = false
-            let c = win.poll_char()
-            while c >= 0 {
-                if c >= 32 {
-                    cur = cur.concat(win.char_utf8(c))
-                    changed = true
-                }
-                c = win.poll_char()
-            }
-            let k = win.poll_key()
-            while k >= 0 {
-                if k == KEY_BACKSPACE {
-                    cur = _drop_last(cur)
-                    changed = true
-                }
-                k = win.poll_key()
-            }
-            if changed {
-                return update_fn(model, UiEvent.Input(fid, cur))
-            }
-            return model
         },
-        None -> {
-            _flush_input(win)
-            return model
-        },
+        None -> {},
     }
-    return model
-}
 
-// Empty the input queues when nothing is focused, so keys do not pile up.
-fun _flush_input(win: Window) {
+    let changed = false
     let c = win.poll_char()
     while c >= 0 {
+        if c >= 32 && has_focus {
+            cur = cur.concat(win.char_utf8(c))
+            changed = true
+        }
         c = win.poll_char()
     }
+
+    let next_focus = focused
     let k = win.poll_key()
     while k >= 0 {
+        if k == KEY_BACKSPACE && has_focus {
+            cur = _drop_last(cur)
+            changed = true
+        }
+        if k == KEY_ESCAPE {
+            next_focus = None
+        }
+        if k == KEY_TAB {
+            next_focus = _next_focus(last, next_focus)
+        }
+        if k == KEY_ENTER {
+            match focused {
+                Some(fid) -> {
+                    model = update_fn(model, UiEvent.Submit(fid))
+                },
+                None -> {},
+            }
+        }
         k = win.poll_key()
     }
-    return
+
+    if changed {
+        match focused {
+            Some(fid) -> {
+                model = update_fn(model, UiEvent.Input(fid, cur))
+            },
+            None -> {},
+        }
+    }
+    return InputOutcome { model, focused: next_focus }
 }
 
 fun _dispatch_click<M>(
