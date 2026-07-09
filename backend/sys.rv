@@ -14,6 +14,9 @@ extern "C" {
     fun q_framebuffer_width(win: Int) -> Int
     fun q_framebuffer_height(win: Int) -> Int
     fun q_clear_rgb(r: Int, g: Int, b: Int)
+    fun q_frame_begin(width: Int, height: Int)
+    fun q_fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int)
+    fun q_frame_end()
 }
 
 fun backend_init() -> Bool {
@@ -62,5 +65,20 @@ fun framebuffer_height(win: Int) -> Int {
 
 fun clear_rgb(r: Int, g: Int, b: Int) {
     q_clear_rgb(r, g, b)
+    return
+}
+
+fun frame_begin(width: Int, height: Int) {
+    q_frame_begin(width, height)
+    return
+}
+
+fun fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int) {
+    q_fill_rect(x, y, w, h, r, g, b, a)
+    return
+}
+
+fun frame_end() {
+    q_frame_end()
     return
 }

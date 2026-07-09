@@ -14,6 +14,9 @@ fun hello_update(m: Model, e: Event) -> Step<Model> {
 
 fun hello_view(m: Model, f: Frame) {
     f.clear(Color.rgb(24, 24, 32))
+    f.rect(80, 80, 320, 200, Color.rgb(90, 140, 240))
+    f.rect(220, 180, 320, 200, Color.rgb(240, 120, 90))
+    f.rect(160, 300, 240, 120, Color.rgb(120, 210, 140))
 }
 
 fun hello_main() -> Bool {

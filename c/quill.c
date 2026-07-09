@@ -8,6 +8,9 @@
 #define WIN(h) ((GLFWwindow *)(intptr_t)(h))
 #define H(p) ((int64_t)(intptr_t)(p))
 
+// Bring up the GL 3.3 core renderer once a context is current (c/render.c).
+extern int q_render_init(void);
+
 int64_t q_init(void) {
     return glfwInit();
 }
@@ -18,12 +21,20 @@ void q_terminate(void) {
 
 int64_t q_window_open(int64_t width, int64_t height, const char *title) {
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
     GLFWwindow *win = glfwCreateWindow((int)width, (int)height, title, NULL, NULL);
     if (!win) {
         return 0;
     }
     glfwMakeContextCurrent(win);
     glfwSwapInterval(1);
+    if (q_render_init() != 0) {
+        glfwDestroyWindow(win);
+        return 0;
+    }
     return H(win);
 }
 

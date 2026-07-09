@@ -24,7 +24,7 @@
 //         run<Model>(App { init: init, update: update, view: view, window: win })
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb }
+import "./backend/sys" { backend_init, backend_terminate, open_window, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, clear_rgb, frame_begin, fill_rect, frame_end }
 
 // An 8-bit-per-channel opaque color.
 struct Color {
@@ -94,6 +94,12 @@ impl Frame {
         clear_rgb(c.r, c.g, c.b)
         return
     }
+
+    // Fill an axis-aligned rectangle, in pixels from the top-left.
+    fun rect(self, x: Int, y: Int, w: Int, h: Int, c: Color) {
+        fill_rect(x, y, w, h, c.r, c.g, c.b, 255)
+        return
+    }
 }
 
 // A whole application: pure functions over a model, plus the window to open.
@@ -142,8 +148,12 @@ fun run<M>(app: App<M>) -> Bool {
             }
         }
 
-        let frame = Frame { width: framebuffer_width(win), height: framebuffer_height(win) }
+        let fw = framebuffer_width(win)
+        let fh = framebuffer_height(win)
+        frame_begin(fw, fh)
+        let frame = Frame { width: fw, height: fh }
         (app.view)(model, frame)
+        frame_end()
         swap_buffers(win)
         poll_events()
     }
