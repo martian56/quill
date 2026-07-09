@@ -1,0 +1,155 @@
+import "../lib" { Font, Color, Theme, WindowConfig }
+import "../widget" { Widget, column, row, panel, label, button, input }
+import "../app" { UiApp, UiEvent, run_ui }
+import std/string
+
+struct Model {
+    items: List<String>,
+    draft: String,
+    theme: Theme,
+}
+
+fun showcase_init() -> Model {
+    let font = Font.load("assets/fonts/Go-Regular.ttf")
+    let items: List<String> = []
+    items.push("Explore quill widgets")
+    items.push("Type a todo, then press Add")
+    return Model { items, draft: "", theme: Theme.dark(font) }
+}
+
+fun _append(items: List<String>, s: String) -> List<String> {
+    let out: List<String> = []
+    let i = 0
+    while i < items.len() {
+        out.push(items[i])
+        i = i + 1
+    }
+    out.push(s)
+    return out
+}
+
+fun _remove_at(items: List<String>, idx: Int) -> List<String> {
+    let out: List<String> = []
+    let i = 0
+    while i < items.len() {
+        if i != idx {
+            out.push(items[i])
+        }
+        i = i + 1
+    }
+    return out
+}
+
+fun _on_click(m: Model, id: String) -> Model {
+    if id == "add" {
+        if m.draft == "" {
+            return m
+        }
+        return Model { items: _append(m.items, m.draft), draft: "", theme: m.theme }
+    }
+    if id.starts_with("del-") {
+        match id.substring(4, id.length()).parse_int() {
+            Some(idx) -> {
+                return Model { items: _remove_at(m.items, idx), draft: m.draft, theme: m.theme }
+            },
+            None -> {},
+        }
+    }
+    return m
+}
+
+fun _on_input(m: Model, id: String, s: String) -> Model {
+    if id == "draft" {
+        return Model { items: m.items, draft: s, theme: m.theme }
+    }
+    return m
+}
+
+fun showcase_update(m: Model, e: UiEvent) -> Model {
+    return match e {
+        Click(id) -> _on_click(m, id),
+        Input(id, s) -> _on_input(m, id, s),
+        Tick -> m,
+    }
+}
+
+fun item_row(m: Model, text: String, i: Int) -> Widget {
+    return panel(
+        row([label(text).size(18).grow(1), button("del-${i}", "Delete").width(110)]).gap(12),
+    ).bg(m.theme.surface).rounded(12).pad(14)
+}
+
+fun items_view(m: Model) -> Widget {
+    if m.items.len() == 0 {
+        return label("nothing yet, add something above").size(16).color(m.theme.muted)
+    }
+    let rows: List<Widget> = []
+    let i = 0
+    while i < m.items.len() {
+        rows.push(item_row(m, m.items[i], i))
+        i = i + 1
+    }
+    return column(rows).gap(10)
+}
+
+fun swatch(c: Color) -> Widget {
+    return label("").bg(c).width(42).height(42).rounded(8)
+}
+
+fun sidebar(m: Model) -> Widget {
+    return panel(
+        column(
+            [
+                label("quill").size(30),
+                label("a GUI toolkit for Raven").size(14).color(m.theme.muted),
+                row(
+                    [
+                        swatch(m.theme.accent),
+                        swatch(m.theme.field),
+                        swatch(m.theme.text),
+                        swatch(m.theme.muted),
+                    ],
+                ).gap(8),
+                label("flex layout").size(15).color(m.theme.muted),
+                label("text and text input").size(15).color(m.theme.muted),
+                label("rounded rectangles").size(15).color(m.theme.muted),
+                label("mouse and keyboard").size(15).color(m.theme.muted),
+            ],
+        ).gap(12),
+    ).bg(m.theme.surface).rounded(16).pad(22).width(300)
+}
+
+fun showcase_view(m: Model) -> Widget {
+    return row(
+        [
+            column(
+                [
+                    label("Todos").size(36),
+                    row([input("draft", m.draft).grow(1).size(18), button("add", "Add").width(110)]).gap(
+                        12,
+                    ),
+                    items_view(m),
+                    label("${m.items.len()} item(s)").size(14).color(m.theme.muted),
+                ],
+            ).grow(1).gap(18),
+            sidebar(m),
+        ],
+    ).pad(32).gap(28)
+}
+
+fun showcase_theme(m: Model) -> Theme {
+    return m.theme
+}
+
+fun showcase_main() -> Bool {
+    let win = WindowConfig.new().size(1000, 640).title("quill showcase")
+    return run_ui<Model>(
+        UiApp {
+            init: showcase_init,
+            update: showcase_update,
+            view: showcase_view,
+            theme: showcase_theme,
+            window: win,
+        },
+    )
+}

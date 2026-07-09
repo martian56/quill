@@ -398,7 +398,9 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
         Label(text) -> {
             _paint_bg(w, f)
             let col = _tint_or(w, theme.text)
-            f.text(Text.new(theme.font, text).at(w.box.x, w.box.y).size(w.tsize).color(col))
+            let lh = theme.font.line_height(w.tsize)
+            let ty = w.box.y + (w.box.h - lh) / 2
+            f.text(Text.new(theme.font, text).at(w.box.x, ty).size(w.tsize).color(col))
         },
         Button(id, text) -> {
             let bgc = _button_bg(w, theme, it)
