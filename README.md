@@ -51,7 +51,7 @@ Add quill to your `rv.toml`:
 
 ```toml
 [dependencies]
-"github.com/martian56/quill" = "v0.1.0"
+"github.com/martian56/quill" = "v0.1.2"
 ```
 
 quill draws text with a font you supply. Point `Font.load` at any `.ttf` on disk;
@@ -59,7 +59,7 @@ the examples in this repo use the bundled `assets/fonts/Go-Regular.ttf`.
 
 ## Quick start
 
-```raven
+```rust
 import "github.com/martian56/quill" { Font, Theme, WindowConfig }
 import "github.com/martian56/quill/widget" { Widget, column, row, label, button }
 import "github.com/martian56/quill/app" { UiApp, UiEvent, run_ui }
@@ -162,7 +162,7 @@ Import these from `github.com/martian56/quill/widget`.
 
 Every widget is styled by chaining modifiers, each of which returns the widget:
 
-```raven
+```rust
 column([...]).pad(24).gap(16).bg(theme.surface).rounded(16)
 ```
 

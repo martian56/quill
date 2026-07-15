@@ -5,3 +5,5 @@
 *.jpeg binary
 *.ttf binary
 *.ico binary
+
+*.rv linguist-language=Rust
