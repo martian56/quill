@@ -1,5 +1,5 @@
-import std/test { assert_eq }
-import "./app" { _prev_char, _next_char, _splice }
+from std.test import assert_eq
+from "./app" import _prev_char, _next_char, _splice
 
 fun test_splice_inserts_and_replaces() {
     assert_eq(_splice("World", 0, 0, "Hi "), "Hi World")

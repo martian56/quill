@@ -1,28 +1,28 @@
-import "../lib" { Font, Color, Image, Theme, WindowConfig }
-import "../widget" { Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, textarea, checkbox, radio, slider, dropdown, image, divider, tabs, tab_of }
-import "../app" { UiApp, UiEvent, run_ui }
-import std/string
+from "../lib" import Font, Color, Image, Theme, WindowConfig
+from "../widget" import Widget, Align, Justify, column, row, panel, scroll, modal, label, button, input, textarea, checkbox, radio, slider, dropdown, image, divider, tabs, tab_of
+from "../app" import UiApp, UiEvent, run_ui
+import std.string
 
-struct Model {
-    items: List<String>,
-    draft: String,
-    show_count: Bool,
-    about_open: Bool,
-    dark: Bool,
-    item_size: Int,
-    newest_first: Bool,
-    priority: String,
-    side_tab: String,
-    notes: String,
-    logo: Image,
-    font: Font,
-    theme: Theme,
+class Model {
+    items: list[str]
+    draft: str
+    show_count: bool
+    about_open: bool
+    dark: bool
+    item_size: int
+    newest_first: bool
+    priority: str
+    side_tab: str
+    notes: str
+    logo: Image
+    font: Font
+    theme: Theme
 }
 
 fun showcase_init() -> Model {
     let font = Font.load("assets/fonts/Go-Regular.ttf")
     let logo = Image.load("assets/images/logo.png")
-    let items: List<String> = []
+    let items: list[str] = []
     items.push("Scroll this list with the mouse wheel")
     items.push("Type a todo and press Add or Enter")
     items.push("Delete removes an item")
@@ -35,8 +35,8 @@ fun showcase_init() -> Model {
     items.push("Self-contained, no system dependencies")
     items.push("Written entirely in Raven")
     items.push("This row is only reachable by scrolling")
-    return Model {
-        items,
+    return Model(
+        items: items,
         draft: "",
         show_count: true,
         about_open: false,
@@ -46,15 +46,15 @@ fun showcase_init() -> Model {
         priority: "Medium",
         side_tab: "Settings",
         notes: "This is a text area. It wraps long lines to the width and takes newlines.\nTry typing, the arrow keys, and dragging to select.",
-        logo,
-        font,
+        logo: logo,
+        font: font,
         theme: Theme.dark(font),
-    }
+    )
 }
 
-fun _remove_at(items: List<String>, idx: Int) -> List<String> {
-    let out: List<String> = []
-    let i = 0
+fun _remove_at(items: list[str], idx: int) -> list[str] {
+    let out: list[str] = []
+    var i = 0
     while i < items.len() {
         if i != idx {
             out.push(items[i])
@@ -72,16 +72,16 @@ fun _add(m: Model) -> Model {
     return m
 }
 
-fun _on_click(m: Model, id: String) -> Model {
+fun _on_click(m: Model, id: str) -> Model {
     if id == "add" {
         return _add(m)
     }
     if id == "show_count" {
-        m.show_count = !m.show_count
+        m.show_count = not m.show_count
         return m
     }
     if id == "theme" {
-        m.dark = !m.dark
+        m.dark = not m.dark
         if m.dark {
             m.theme = Theme.dark(m.font)
         } else {
@@ -115,17 +115,17 @@ fun _on_click(m: Model, id: String) -> Model {
     }
     if id.starts_with("del-") {
         match id.substring(4, id.length()).parse_int() {
-            Some(idx) -> {
+            case Some(idx) {
                 m.items = _remove_at(m.items, idx)
                 return m
-            },
-            None -> {},
+            }
+            case None {}
         }
     }
     return m
 }
 
-fun _on_input(m: Model, id: String, s: String) -> Model {
+fun _on_input(m: Model, id: str, s: str) -> Model {
     if id == "draft" {
         m.draft = s
     }
@@ -135,14 +135,14 @@ fun _on_input(m: Model, id: String, s: String) -> Model {
     return m
 }
 
-fun _on_slide(m: Model, id: String, v: Int) -> Model {
+fun _on_slide(m: Model, id: str, v: int) -> Model {
     if id == "item_size" {
         m.item_size = v
     }
     return m
 }
 
-fun _on_select(m: Model, id: String, opt: String) -> Model {
+fun _on_select(m: Model, id: str, opt: str) -> Model {
     if id == "priority" {
         m.priority = opt
     }
@@ -151,16 +151,16 @@ fun _on_select(m: Model, id: String, opt: String) -> Model {
 
 fun showcase_update(m: Model, e: UiEvent) -> Model {
     return match e {
-        Click(id) -> _on_click(m, id),
-        Input(id, s) -> _on_input(m, id, s),
-        Submit(id) -> _add(m),
-        Slide(id, v) -> _on_slide(m, id, v),
-        Select(id, opt) -> _on_select(m, id, opt),
-        Tick -> m,
+        case Click(id) { _on_click(m, id) }
+        case Input(id, s) { _on_input(m, id, s) }
+        case Submit(id) { _add(m) }
+        case Slide(id, v) { _on_slide(m, id, v) }
+        case Select(id, opt) { _on_select(m, id, opt) }
+        case Tick { m }
     }
 }
 
-fun item_row(m: Model, text: String, i: Int) -> Widget {
+fun item_row(m: Model, text: str, i: int) -> Widget {
     return panel(
         row(
             [
@@ -175,15 +175,15 @@ fun items_view(m: Model) -> Widget {
     if m.items.len() == 0 {
         return label("nothing yet, add something above").size(16).color(m.theme.muted)
     }
-    let rows: List<Widget> = []
+    let rows: list[Widget] = []
     if m.newest_first {
-        let i = m.items.len() - 1
+        var i = m.items.len() - 1
         while i >= 0 {
             rows.push(item_row(m, m.items[i], i))
             i = i - 1
         }
     } else {
-        let i = 0
+        var i = 0
         while i < m.items.len() {
             rows.push(item_row(m, m.items[i], i))
             i = i + 1
@@ -237,7 +237,7 @@ fun side_settings(m: Model) -> Widget {
             checkbox("show_count", m.show_count, "Show item count").size(16),
             checkbox("theme", m.dark, "Dark theme").size(16).tip("Switch between light and dark"),
             radio("sort_new", m.newest_first, "Newest first").size(16),
-            radio("sort_old", !m.newest_first, "Oldest first").size(16),
+            radio("sort_old", not m.newest_first, "Oldest first").size(16),
             label("Priority").size(15).color(m.theme.muted),
             dropdown("priority", m.priority, ["Low", "Medium", "High"]).size(16),
             label("Text size: ${m.item_size}").size(15).color(m.theme.muted),
@@ -256,7 +256,7 @@ fun side_notes(m: Model) -> Widget {
 }
 
 fun sidebar(m: Model) -> Widget {
-    let content = side_settings(m)
+    var content = side_settings(m)
     if m.side_tab == "Info" {
         content = side_info(m)
     }
@@ -317,15 +317,15 @@ fun showcase_theme(m: Model) -> Theme {
     return m.theme
 }
 
-fun showcase_main() -> Bool {
+fun showcase_main() -> bool {
     let win = WindowConfig.new().size(1000, 640).title("quill showcase")
-    return run_ui<Model>(
-        UiApp {
+    return run_ui[Model](
+        UiApp(
             init: showcase_init,
             update: showcase_update,
             view: showcase_view,
             theme: showcase_theme,
             window: win,
-        },
+        ),
     )
 }

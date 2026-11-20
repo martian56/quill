@@ -1,43 +1,43 @@
 // quill paint: draw a laid-out widget tree onto a Frame, applying hover, press,
 // and focus feedback. render lays a tree out (via layout) and paints it.
 
-import "./lib" { Frame, Rect, Color, Text, Theme }
-import "./widget" { Widget, WidgetKind, _contains }
-import "./layout" { measure, arrange }
-import std/string
+from "./lib" import Frame, Rect, Color, Text, Theme
+from "./widget" import Widget, WidgetKind, _contains
+from "./layout" import measure, arrange
+import std.string
 
-const BUTTON_RADIUS: Int = 8
-const INPUT_PAD_X: Int = 12
-const INPUT_RADIUS: Int = 8
-const CHECK_GAP: Int = 10
-const SLIDER_TRACK: Int = 6
-const SLIDER_R: Int = 9
-const DD_PAD_X: Int = 12
-const DD_RADIUS: Int = 8
-const DD_ARROW: Int = 22
-const DD_ITEM_PAD: Int = 12
-const TIP_SIZE: Int = 14
-const TIP_PAD_X: Int = 10
-const TIP_PAD_Y: Int = 6
-const TIP_GAP: Int = 8
-const TA_PAD: Int = 10
-const TA_TRAIL: Int = 6
+let BUTTON_RADIUS: int = 8
+let INPUT_PAD_X: int = 12
+let INPUT_RADIUS: int = 8
+let CHECK_GAP: int = 10
+let SLIDER_TRACK: int = 6
+let SLIDER_R: int = 9
+let DD_PAD_X: int = 12
+let DD_RADIUS: int = 8
+let DD_ARROW: int = 22
+let DD_ITEM_PAD: int = 12
+let TIP_SIZE: int = 14
+let TIP_PAD_X: int = 10
+let TIP_PAD_Y: int = 6
+let TIP_GAP: int = 8
+let TA_PAD: int = 10
+let TA_TRAIL: int = 6
 
 // The interaction state paint reads for hover, press, and focus feedback. Build
 // _inert() when there is no interaction (a plain render).
-struct Interaction {
-    x: Int,
-    y: Int,
-    down: Bool,
-    focus: String?,
-    caret_on: Bool,
-    caret_pos: Int,
-    sel_anchor: Int,
-    ta_top: Int,
+class Interaction {
+    x: int
+    y: int
+    down: bool
+    focus: str?
+    caret_on: bool
+    caret_pos: int
+    sel_anchor: int
+    ta_top: int
 }
 
 fun _inert() -> Interaction {
-    return Interaction {
+    return Interaction(
         x: -1,
         y: -1,
         down: false,
@@ -46,43 +46,37 @@ fun _inert() -> Interaction {
         caret_pos: 0,
         sel_anchor: 0,
         ta_top: 0,
-    }
+    )
 }
 
 fun _tint_or(w: Widget, fallback: Color) -> Color {
     return match w.tint {
-        Some(c) -> c,
-        None -> fallback,
+        case Some(c) { c }
+        case None { fallback }
     }
 }
 
 fun _fill_or(w: Widget, fallback: Color) -> Color {
     return match w.fill {
-        Some(c) -> c,
-        None -> fallback,
+        case Some(c) { c }
+        case None { fallback }
     }
 }
 
 fun _paint_bg(w: Widget, f: Frame) {
     match w.fill {
-        Some(c) -> {
-            if w.corner > 0 {
-                f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, w.corner, c)
-            } else {
-                f.rect(w.box.x, w.box.y, w.box.w, w.box.h, c)
-            }
-        },
-        None -> {},
+        case Some(c) { f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, w.corner, c) if w.corner > 0 else f.rect(w.box.x, w.box.y, w.box.w, w.box.h, c) }
+        case None {}
     }
     return
 }
 
 fun _button_bg(w: Widget, theme: Theme, it: Interaction) -> Color {
-    if !w.enabled {
+    if not w.enabled {
         return theme.field
     }
     let base = _fill_or(w, theme.accent)
-    if !_contains(w.box, it.x, it.y) {
+    if not _contains(w.box, it.x, it.y) {
         return base
     }
     if it.down {
@@ -91,37 +85,37 @@ fun _button_bg(w: Widget, theme: Theme, it: Interaction) -> Color {
     return base.lighten(12)
 }
 
-fun _is_focused(it: Interaction, id: String) -> Bool {
+fun _is_focused(it: Interaction, id: str) -> bool {
     return match it.focus {
-        Some(fid) -> fid == id,
-        None -> false,
+        case Some(fid) { fid == id }
+        case None { false }
     }
 }
 
 // Walk the laid-out tree and draw it, applying interaction feedback.
 fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
     match w.kind {
-        Label(text) -> {
+        case Label(text) {
             _paint_bg(w, f)
-            let col = _tint_or(w, theme.text)
+            var col = _tint_or(w, theme.text)
             let lh = theme.font.line_height(w.tsize)
             let ty = w.box.y + (w.box.h - lh) / 2
             f.text(Text.new(theme.font, text).at(w.box.x, ty).size(w.tsize).color(col))
-        },
-        Button(id, text) -> {
+        }
+        case Button(id, text) {
             let bgc = _button_bg(w, theme, it)
             f.rounded_rect(w.box.x, w.box.y, w.box.w, w.box.h, BUTTON_RADIUS, bgc)
             let tw = theme.font.width(w.tsize, text)
             let lh = theme.font.line_height(w.tsize)
             let tx = w.box.x + (w.box.w - tw) / 2
             let ty = w.box.y + (w.box.h - lh) / 2
-            let col = theme.muted
+            var col = theme.muted
             if w.enabled {
                 col = _tint_or(w, theme.on_accent)
             }
             f.text(Text.new(theme.font, text).at(tx, ty).size(w.tsize).color(col))
-        },
-        Input(id, value) -> {
+        }
+        case Input(id, value) {
             _paint_input(
                 w,
                 f,
@@ -132,8 +126,8 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
                 it.caret_pos,
                 it.sel_anchor,
             )
-        },
-        TextArea(id, value) -> {
+        }
+        case TextArea(id, value) {
             _paint_textarea(
                 w,
                 f,
@@ -145,55 +139,51 @@ fun paint(w: Widget, f: Frame, theme: Theme, it: Interaction) {
                 it.sel_anchor,
                 it.ta_top,
             )
-        },
-        Checkbox(id, checked, text) -> {
+        }
+        case Checkbox(id, checked, text) {
             _paint_checkbox(w, f, theme, checked, text, _contains(w.box, it.x, it.y))
-        },
-        Radio(id, selected, text) -> {
+        }
+        case Radio(id, selected, text) {
             _paint_radio(w, f, theme, selected, text, _contains(w.box, it.x, it.y))
-        },
-        Slider(id, value, lo, hi) -> {
+        }
+        case Slider(id, value, lo, hi) {
             _paint_slider(w, f, theme, value, lo, hi, _contains(w.box, it.x, it.y))
-        },
-        Dropdown(id, selected, options) -> {
+        }
+        case Dropdown(id, selected, options) {
             _paint_dropdown(w, f, theme, selected, _contains(w.box, it.x, it.y))
-        },
-        Image(handle, iw, ih) -> {
-            f.image(handle, w.box.x, w.box.y, w.box.w, w.box.h)
-        },
-        Divider -> {
-            f.rect(w.box.x, w.box.y, w.box.w, 1, theme.border)
-        },
-        Scroll(id) -> {
+        }
+        case Image(handle, iw, ih) { f.image(handle, w.box.x, w.box.y, w.box.w, w.box.h) }
+        case Divider { f.rect(w.box.x, w.box.y, w.box.w, 1, theme.border) }
+        case Scroll(id) {
             _paint_bg(w, f)
             f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
-            let i = 0
+            var i = 0
             while i < w.kids.len() {
                 paint(w.kids[i], f, theme, it)
                 i = i + 1
             }
             f.unclip()
-        },
-        Modal(id) -> {
+        }
+        case Modal(id) {
             if w.kids.len() >= 2 {
                 paint(w.kids[0], f, theme, it)
                 f.rect_alpha(w.box.x, w.box.y, w.box.w, w.box.h, Color.rgb(0, 0, 0), 150)
                 paint(w.kids[1], f, theme, it)
             }
-        },
-        _ -> {
+        }
+        case _ {
             _paint_bg(w, f)
-            let i = 0
+            var i = 0
             while i < w.kids.len() {
                 paint(w.kids[i], f, theme, it)
                 i = i + 1
             }
-        },
+        }
     }
     return
 }
 
-fun _abs(n: Int) -> Int {
+fun _abs(n: int) -> int {
     if n < 0 {
         return -n
     }
@@ -202,10 +192,10 @@ fun _abs(n: Int) -> Int {
 
 // Draw a line from (x0, y0) to (x1, y1) as a run of small squares of side t,
 // centered on the path, so no diagonal primitive is needed.
-fun _stroke(f: Frame, x0: Int, y0: Int, x1: Int, y1: Int, t: Int, c: Color) {
+fun _stroke(f: Frame, x0: int, y0: int, x1: int, y1: int, t: int, c: Color) {
     let dx = x1 - x0
     let dy = y1 - y0
-    let steps = _abs(dx)
+    var steps = _abs(dx)
     if _abs(dy) > steps {
         steps = _abs(dy)
     }
@@ -213,7 +203,7 @@ fun _stroke(f: Frame, x0: Int, y0: Int, x1: Int, y1: Int, t: Int, c: Color) {
         steps = 1
     }
     let h = t / 2
-    let i = 0
+    var i = 0
     while i <= steps {
         f.rect(x0 + dx * i / steps - h, y0 + dy * i / steps - h, t, t, c)
         i = i + 1
@@ -223,8 +213,8 @@ fun _stroke(f: Frame, x0: Int, y0: Int, x1: Int, y1: Int, t: Int, c: Color) {
 
 // A checkmark drawn from two strokes inside a box of side s at (bx, by), so it
 // renders with any font (the check glyph is absent from most text fonts).
-fun _draw_check(f: Frame, bx: Int, by: Int, s: Int, c: Color) {
-    let t = s / 6
+fun _draw_check(f: Frame, bx: int, by: int, s: int, c: Color) {
+    var t = s / 6
     if t < 2 {
         t = 2
     }
@@ -233,11 +223,11 @@ fun _draw_check(f: Frame, bx: Int, by: Int, s: Int, c: Color) {
     return
 }
 
-fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: String, hovered: Bool) {
+fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: bool, text: str, hovered: bool) {
     let box = theme.font.line_height(w.tsize)
     let bx = w.box.x
     let by = w.box.y
-    let fill = theme.field
+    var fill = theme.field
     if checked {
         fill = theme.accent
     }
@@ -252,11 +242,11 @@ fun _paint_checkbox(w: Widget, f: Frame, theme: Theme, checked: Bool, text: Stri
     return
 }
 
-fun _paint_radio(w: Widget, f: Frame, theme: Theme, selected: Bool, text: String, hovered: Bool) {
+fun _paint_radio(w: Widget, f: Frame, theme: Theme, selected: bool, text: str, hovered: bool) {
     let box = theme.font.line_height(w.tsize)
     let bx = w.box.x
     let by = w.box.y
-    let ring = theme.field
+    var ring = theme.field
     if hovered {
         ring = ring.lighten(12)
     }
@@ -274,7 +264,7 @@ fun _paint_radio(w: Widget, f: Frame, theme: Theme, selected: Bool, text: String
 }
 
 // Handle-fill width for a slider value, clamped to the usable track.
-fun _slider_fill(w: Widget, value: Int, lo: Int, hi: Int) -> Int {
+fun _slider_fill(w: Widget, value: int, lo: int, hi: int) -> int {
     let usable = w.box.w - 2 * SLIDER_R
     let range = hi - lo
     if range <= 0 {
@@ -290,14 +280,14 @@ fun _slider_fill(w: Widget, value: Int, lo: Int, hi: Int) -> Int {
     return t
 }
 
-fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: Int, lo: Int, hi: Int, hovered: Bool) {
+fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: int, lo: int, hi: int, hovered: bool) {
     let cy = w.box.y + w.box.h / 2
     let ty = cy - SLIDER_TRACK / 2
     let x0 = w.box.x + SLIDER_R
     f.rounded_rect(x0, ty, w.box.w - 2 * SLIDER_R, SLIDER_TRACK, SLIDER_TRACK / 2, theme.field)
     let fill = _slider_fill(w, value, lo, hi)
     f.rounded_rect(x0, ty, fill, SLIDER_TRACK, SLIDER_TRACK / 2, theme.accent)
-    let hc = theme.accent
+    var hc = theme.accent
     if hovered {
         hc = theme.accent.lighten(14)
     }
@@ -305,7 +295,7 @@ fun _paint_slider(w: Widget, f: Frame, theme: Theme, value: Int, lo: Int, hi: In
     return
 }
 
-fun _clamp(n: Int, hi: Int) -> Int {
+fun _clamp(n: int, hi: int) -> int {
     if n < 0 {
         return 0
     }
@@ -319,13 +309,13 @@ fun _paint_input(
     w: Widget,
     f: Frame,
     theme: Theme,
-    value: String,
-    focused: Bool,
-    caret_on: Bool,
-    caret_pos: Int,
-    sel_anchor: Int,
+    value: str,
+    focused: bool,
+    caret_on: bool,
+    caret_pos: int,
+    sel_anchor: int,
 ) {
-    let border = theme.field
+    var border = theme.field
     if focused {
         border = theme.accent
     }
@@ -344,9 +334,9 @@ fun _paint_input(
     // A selection draws behind the text as a translucent accent band.
     let cp = _clamp(caret_pos, value.length())
     let an = _clamp(sel_anchor, value.length())
-    if focused && an != cp {
-        let lo = an
-        let hi = cp
+    if focused and an != cp {
+        var lo = an
+        var hi = cp
         if lo > hi {
             lo = cp
             hi = an
@@ -356,7 +346,7 @@ fun _paint_input(
         f.rect_alpha(sx, ty, ex - sx, lh, theme.accent, 110)
     }
     f.text(Text.new(theme.font, value).at(tx, ty).size(w.tsize).color(theme.text))
-    if focused && caret_on {
+    if focused and caret_on {
         let caret = tx + theme.font.width(w.tsize, value.substring(0, cp)) + 1
         f.rect(caret, ty, 2, lh, theme.accent)
     }
@@ -365,21 +355,21 @@ fun _paint_input(
 
 // Byte offset in an input's text nearest to cursor x, for click-to-place-caret
 // and drag selection. Returns 0 for a click left of the text.
-fun caret_index_at(w: Widget, theme: Theme, x: Int) -> Int {
+fun caret_index_at(w: Widget, theme: Theme, x: int) -> int {
     return match w.kind {
-        Input(id, value) -> _input_caret(w, theme, value, x),
-        _ -> 0,
+        case Input(id, value) { _input_caret(w, theme, value, x) }
+        case _ { 0 }
     }
 }
 
-fun _input_caret(w: Widget, theme: Theme, value: String, x: Int) -> Int {
+fun _input_caret(w: Widget, theme: Theme, value: str, x: int) -> int {
     let tx = w.box.x + INPUT_PAD_X
     let rel = x - tx
     if rel <= 0 {
         return 0
     }
-    let i = 0
-    let prev = 0
+    var i = 0
+    var prev = 0
     while i < value.length() {
         let nx = _next_boundary(value, i)
         let cw = theme.font.width(w.tsize, value.substring(0, nx))
@@ -393,19 +383,19 @@ fun _input_caret(w: Widget, theme: Theme, value: String, x: Int) -> Int {
 }
 
 // Byte index of the character boundary after i, skipping UTF-8 continuations.
-fun _next_boundary(s: String, i: Int) -> Int {
+fun _next_boundary(s: str, i: int) -> int {
     let n = s.length()
     if i >= n {
         return n
     }
-    let c = i + 1
-    let scanning = true
+    var c = i + 1
+    var scanning = true
     while scanning {
         if c >= n {
             scanning = false
         } else {
             let b = s.byte_at(c)
-            if b >= 128 && b < 192 {
+            if b >= 128 and b < 192 {
                 c = c + 1
             } else {
                 scanning = false
@@ -416,22 +406,22 @@ fun _next_boundary(s: String, i: Int) -> Int {
 }
 
 // One displayed row of a text area: a byte range [start, end) of the value.
-struct VLine {
-    start: Int,
-    end: Int,
+class VLine {
+    start: int
+    end: int
 }
 
 // Wrap value into visual lines that fit inner_w, breaking at spaces and hard
 // breaking any word wider than the box; an explicit newline always starts a new
 // line. The result always has at least one line, so an empty area has a caret row.
-fun wrap_area(theme: Theme, size: Int, inner_w: Int, value: String) -> List<VLine> {
-    let lines: List<VLine> = []
+fun wrap_area(theme: Theme, size: int, inner_w: int, value: str) -> list[VLine] {
+    let lines: list[VLine] = []
     let n = value.length()
-    let para_start = 0
-    let i = 0
+    var para_start = 0
+    var i = 0
     while i <= n {
-        let is_nl = i < n && value.byte_at(i) == 10
-        if i == n || is_nl {
+        let is_nl = i < n and value.byte_at(i) == 10
+        if i == n or is_nl {
             _wrap_paragraph(theme, size, inner_w, value, para_start, i, lines)
             para_start = i + 1
         }
@@ -442,31 +432,31 @@ fun wrap_area(theme: Theme, size: Int, inner_w: Int, value: String) -> List<VLin
 
 fun _wrap_paragraph(
     theme: Theme,
-    size: Int,
-    inner_w: Int,
-    value: String,
-    start: Int,
-    end: Int,
-    out: List<VLine>,
+    size: int,
+    inner_w: int,
+    value: str,
+    start: int,
+    end: int,
+    out: list[VLine],
 ) {
     if end <= start {
-        out.push(VLine { start, end: start })
+        out.push(VLine(start: start, end: start))
         return
     }
-    let line_start = start
-    let last_space = -1
-    let i = start
+    var line_start = start
+    var last_space = -1
+    var i = start
     while i < end {
         let nx = _next_boundary(value, i)
-        let over = theme.font.width(size, value.substring(line_start, nx)) > inner_w && i > line_start
+        let over = theme.font.width(size, value.substring(line_start, nx)) > inner_w and i > line_start
         if over {
             if last_space >= line_start {
-                out.push(VLine { start: line_start, end: last_space })
+                out.push(VLine(start: line_start, end: last_space))
                 line_start = last_space + 1
                 last_space = -1
                 i = line_start
             } else {
-                out.push(VLine { start: line_start, end: i })
+                out.push(VLine(start: line_start, end: i))
                 line_start = i
                 last_space = -1
             }
@@ -477,17 +467,17 @@ fun _wrap_paragraph(
             i = nx
         }
     }
-    out.push(VLine { start: line_start, end })
+    out.push(VLine(start: line_start, end: end))
     return
 }
 
 // The visual line index the caret at byte offset sits on. At a wrap boundary the
 // caret shows at the start of the following line.
-fun caret_line(lines: List<VLine>, caret: Int) -> Int {
-    let i = 0
+fun caret_line(lines: list[VLine], caret: int) -> int {
+    var i = 0
     while i < lines.len() {
         let ln = lines[i]
-        if caret >= ln.start && caret < ln.end {
+        if caret >= ln.start and caret < ln.end {
             return i
         }
         if caret == ln.end {
@@ -507,7 +497,7 @@ fun caret_line(lines: List<VLine>, caret: Int) -> Int {
 }
 
 // How many wrapped rows fit in a text area's box.
-fun textarea_rows(w: Widget, theme: Theme) -> Int {
+fun textarea_rows(w: Widget, theme: Theme) -> int {
     let lh = theme.font.line_height(w.tsize)
     if lh <= 0 {
         return 1
@@ -520,25 +510,25 @@ fun textarea_rows(w: Widget, theme: Theme) -> Int {
 }
 
 // The wrapped lines of a text area at its current width.
-fun textarea_lines(w: Widget, theme: Theme) -> List<VLine> {
+fun textarea_lines(w: Widget, theme: Theme) -> list[VLine] {
     match w.kind {
-        TextArea(id, value) -> {
+        case TextArea(id, value) {
             return wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let empty: List<VLine> = []
+    let empty: list[VLine] = []
     return empty
 }
 
 // Byte offset in [ln.start, ln.end] whose left edge is nearest px, measured from
 // the line's left.
-fun _offset_in_line(ln: VLine, value: String, theme: Theme, size: Int, px: Int) -> Int {
+fun _offset_in_line(ln: VLine, value: str, theme: Theme, size: int, px: int) -> int {
     if px <= 0 {
         return ln.start
     }
-    let i = ln.start
-    let prev = 0
+    var i = ln.start
+    var prev = 0
     while i < ln.end {
         let nx = _next_boundary(value, i)
         let cw = theme.font.width(size, value.substring(ln.start, nx))
@@ -552,20 +542,20 @@ fun _offset_in_line(ln: VLine, value: String, theme: Theme, size: Int, px: Int) 
 }
 
 // The caret byte offset for a click at (x, y) in a text area shown from top_line.
-fun textarea_caret_at(w: Widget, theme: Theme, x: Int, y: Int, top_line: Int) -> Int {
+fun textarea_caret_at(w: Widget, theme: Theme, x: int, y: int, top_line: int) -> int {
     return match w.kind {
-        TextArea(id, value) -> _ta_caret(w, theme, value, x, y, top_line),
-        _ -> 0,
+        case TextArea(id, value) { _ta_caret(w, theme, value, x, y, top_line) }
+        case _ { 0 }
     }
 }
 
-fun _ta_caret(w: Widget, theme: Theme, value: String, x: Int, y: Int, top_line: Int) -> Int {
+fun _ta_caret(w: Widget, theme: Theme, value: str, x: int, y: int, top_line: int) -> int {
     let lines = wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
     if lines.len() == 0 {
         return 0
     }
     let lh = theme.font.line_height(w.tsize)
-    let li = top_line + (y - w.box.y - TA_PAD) / lh
+    var li = top_line + (y - w.box.y - TA_PAD) / lh
     if li < 0 {
         li = 0
     }
@@ -576,14 +566,14 @@ fun _ta_caret(w: Widget, theme: Theme, value: String, x: Int, y: Int, top_line: 
 }
 
 // Move the caret one visual row up (dir -1) or down (dir +1), keeping its column.
-fun textarea_move_v(w: Widget, theme: Theme, caret: Int, dir: Int) -> Int {
+fun textarea_move_v(w: Widget, theme: Theme, caret: int, dir: int) -> int {
     return match w.kind {
-        TextArea(id, value) -> _ta_move_v(w, theme, value, caret, dir),
-        _ -> caret,
+        case TextArea(id, value) { _ta_move_v(w, theme, value, caret, dir) }
+        case _ { caret }
     }
 }
 
-fun _ta_move_v(w: Widget, theme: Theme, value: String, caret: Int, dir: Int) -> Int {
+fun _ta_move_v(w: Widget, theme: Theme, value: str, caret: int, dir: int) -> int {
     let lines = wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
     if lines.len() == 0 {
         return caret
@@ -602,21 +592,21 @@ fun _ta_move_v(w: Widget, theme: Theme, value: String, caret: Int, dir: Int) -> 
 }
 
 // The start / end byte offset of the visual line the caret sits on.
-fun textarea_home(w: Widget, theme: Theme, caret: Int) -> Int {
+fun textarea_home(w: Widget, theme: Theme, caret: int) -> int {
     return match w.kind {
-        TextArea(id, value) -> _ta_edge(w, theme, value, caret, false),
-        _ -> caret,
+        case TextArea(id, value) { _ta_edge(w, theme, value, caret, false) }
+        case _ { caret }
     }
 }
 
-fun textarea_end(w: Widget, theme: Theme, caret: Int) -> Int {
+fun textarea_end(w: Widget, theme: Theme, caret: int) -> int {
     return match w.kind {
-        TextArea(id, value) -> _ta_edge(w, theme, value, caret, true),
-        _ -> caret,
+        case TextArea(id, value) { _ta_edge(w, theme, value, caret, true) }
+        case _ { caret }
     }
 }
 
-fun _ta_edge(w: Widget, theme: Theme, value: String, caret: Int, end_edge: Bool) -> Int {
+fun _ta_edge(w: Widget, theme: Theme, value: str, caret: int, end_edge: bool) -> int {
     let lines = wrap_area(theme, w.tsize, w.box.w - 2 * TA_PAD, value)
     if lines.len() == 0 {
         return caret
@@ -628,14 +618,14 @@ fun _ta_edge(w: Widget, theme: Theme, value: String, caret: Int, end_edge: Bool)
     return lines[cl].start
 }
 
-fun _min(a: Int, b: Int) -> Int {
+fun _min(a: int, b: int) -> int {
     if a < b {
         return a
     }
     return b
 }
 
-fun _max(a: Int, b: Int) -> Int {
+fun _max(a: int, b: int) -> int {
     if a > b {
         return a
     }
@@ -646,14 +636,14 @@ fun _paint_textarea(
     w: Widget,
     f: Frame,
     theme: Theme,
-    value: String,
-    focused: Bool,
-    caret_on: Bool,
-    caret_pos: Int,
-    sel_anchor: Int,
-    top_line: Int,
+    value: str,
+    focused: bool,
+    caret_on: bool,
+    caret_pos: int,
+    sel_anchor: int,
+    top_line: int,
 ) {
-    let border = theme.field
+    var border = theme.field
     if focused {
         border = theme.accent
     }
@@ -675,26 +665,26 @@ fun _paint_textarea(
     let an = _clamp(sel_anchor, value.length())
     let lo = _min(cp, an)
     let hi = _max(cp, an)
-    let has_sel = focused && lo != hi
+    let has_sel = focused and lo != hi
     let ccl = caret_line(lines, cp)
     f.clip(w.box.x, w.box.y, w.box.w, w.box.h)
-    let r = 0
+    var r = 0
     while r < rows {
         let li = top_line + r
-        if li >= 0 && li < lines.len() {
+        if li >= 0 and li < lines.len() {
             let ln = lines[li]
             let ly = y0 + r * lh
-            if has_sel && lo <= ln.end && hi >= ln.start {
-                let a = lo
+            if has_sel and lo <= ln.end and hi >= ln.start {
+                var a = lo
                 if a < ln.start {
                     a = ln.start
                 }
-                let b = hi
+                var b = hi
                 if b > ln.end {
                     b = ln.end
                 }
                 let ax = tx + theme.font.width(w.tsize, value.substring(ln.start, a))
-                let bx = tx + theme.font.width(w.tsize, value.substring(ln.start, b))
+                var bx = tx + theme.font.width(w.tsize, value.substring(ln.start, b))
                 if hi > ln.end {
                     bx = bx + TA_TRAIL
                 }
@@ -705,7 +695,7 @@ fun _paint_textarea(
                     theme.text,
                 ),
             )
-            if focused && caret_on && li == ccl {
+            if focused and caret_on and li == ccl {
                 let caret = tx + theme.font.width(w.tsize, value.substring(ln.start, cp)) + 1
                 f.rect(caret, ly, 2, lh, theme.accent)
             }
@@ -716,8 +706,8 @@ fun _paint_textarea(
     return
 }
 
-fun _paint_dropdown(w: Widget, f: Frame, theme: Theme, selected: String, hovered: Bool) {
-    let bg = theme.field
+fun _paint_dropdown(w: Widget, f: Frame, theme: Theme, selected: str, hovered: bool) {
+    var bg = theme.field
     if hovered {
         bg = bg.lighten(10)
     }
@@ -742,19 +732,19 @@ fun _paint_chevron(w: Widget, f: Frame, theme: Theme) {
     return
 }
 
-fun _dd_item_h(theme: Theme, tsize: Int) -> Int {
+fun _dd_item_h(theme: Theme, tsize: int) -> int {
     return theme.font.line_height(tsize) + DD_ITEM_PAD
 }
 
 // Which option index is under (mx, my) in the open dropdown's menu, if any.
-fun dd_option_at(w: Widget, theme: Theme, mx: Int, my: Int) -> Int? {
+fun dd_option_at(w: Widget, theme: Theme, mx: int, my: int) -> int? {
     return match w.kind {
-        Dropdown(id, selected, options) -> _option_index(w, theme, options.len(), mx, my),
-        _ -> None,
+        case Dropdown(id, selected, options) { _option_index(w, theme, options.len(), mx, my) }
+        case _ { None }
     }
 }
 
-fun _option_index(w: Widget, theme: Theme, n: Int, mx: Int, my: Int) -> Int? {
+fun _option_index(w: Widget, theme: Theme, n: int, mx: int, my: int) -> int? {
     let ih = _dd_item_h(theme, w.tsize)
     let x0 = w.box.x
     let y0 = w.box.y + w.box.h + 4
@@ -778,19 +768,19 @@ fun _option_index(w: Widget, theme: Theme, n: Int, mx: Int, my: Int) -> Int? {
 }
 
 // Draw an open dropdown's menu below its trigger, highlighting the hovered row.
-fun paint_menu(w: Widget, f: Frame, theme: Theme, mx: Int, my: Int) {
+fun paint_menu(w: Widget, f: Frame, theme: Theme, mx: int, my: int) {
     match w.kind {
-        Dropdown(id, selected, options) -> {
+        case Dropdown(id, selected, options) {
             let ih = _dd_item_h(theme, w.tsize)
             let x0 = w.box.x
             let y0 = w.box.y + w.box.h + 4
             let mw = w.box.w
             f.rounded_rect(x0, y0, mw, options.len() * ih, DD_RADIUS, theme.surface)
-            let i = 0
+            var i = 0
             while i < options.len() {
                 let ry = y0 + i * ih
-                let hov = mx >= x0 && mx < x0 + mw && my >= ry && my < ry + ih
-                let col = theme.text
+                let hov = mx >= x0 and mx < x0 + mw and my >= ry and my < ry + ih
+                var col = theme.text
                 if hov {
                     f.rect(x0, ry, mw, ih, theme.accent)
                     col = theme.on_accent
@@ -799,28 +789,28 @@ fun paint_menu(w: Widget, f: Frame, theme: Theme, mx: Int, my: Int) {
                 f.text(Text.new(theme.font, options[i]).at(x0 + DD_PAD_X, ty).size(w.tsize).color(col))
                 i = i + 1
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
     return
 }
 
 // A resolved tooltip: the text to show and the box of the widget it belongs to.
-struct Tooltip {
-    text: String,
-    box: Rect,
+class Tooltip {
+    text: str
+    box: Rect
 }
 
 // Draw a tooltip bubble anchored under its widget, flipping above when it would
 // fall off the bottom and clamping inside the window. Drawn last, so it floats
 // over everything including an open menu.
-fun paint_tooltip(f: Frame, theme: Theme, tip: Tooltip, win_w: Int, win_h: Int) {
+fun paint_tooltip(f: Frame, theme: Theme, tip: Tooltip, win_w: int, win_h: int) {
     let lh = theme.font.line_height(TIP_SIZE)
     let tw = theme.font.width(TIP_SIZE, tip.text)
     let bw = tw + 2 * TIP_PAD_X
     let bh = lh + 2 * TIP_PAD_Y
-    let bx = tip.box.x
-    let by = tip.box.y + tip.box.h + TIP_GAP
+    var bx = tip.box.x
+    var by = tip.box.y + tip.box.h + TIP_GAP
     if by + bh > win_h {
         by = tip.box.y - bh - TIP_GAP
     }
@@ -847,7 +837,7 @@ fun paint_tooltip(f: Frame, theme: Theme, tip: Tooltip, win_w: Int, win_h: Int) 
 // driving the core loop yourself; run_ui (in the app module) does it for you.
 fun render(f: Frame, theme: Theme, root: Widget) {
     measure(root, theme)
-    arrange(root, Rect { x: 0, y: 0, w: f.width, h: f.height })
+    arrange(root, Rect(x: 0, y: 0, w: f.width, h: f.height))
     paint(root, f, theme, _inert())
     return
 }

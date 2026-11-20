@@ -1,49 +1,49 @@
 // Bindings for c/quill.c. This is the only module that declares the extern
 // symbols; everything else goes through these wrappers.
 
-import std/ffi { to_cstr, free_cstr, from_cstr }
+from std.ffi import to_cstr, free_cstr, from_cstr
 
 extern "C" {
-    fun q_init() -> Int
+    fun q_init() -> int
     fun q_terminate()
-    fun q_window_open(width: Int, height: Int, title: CStr) -> Int
-    fun q_window_icon(win: Int, path: CStr) -> Int
-    fun q_window_should_close(win: Int) -> Int
+    fun q_window_open(width: int, height: int, title: CStr) -> int
+    fun q_window_icon(win: int, path: CStr) -> int
+    fun q_window_should_close(win: int) -> int
     fun q_poll()
-    fun q_window_swap(win: Int)
-    fun q_window_close(win: Int)
-    fun q_framebuffer_width(win: Int) -> Int
-    fun q_framebuffer_height(win: Int) -> Int
-    fun q_cursor_x(win: Int) -> Int
-    fun q_cursor_y(win: Int) -> Int
-    fun q_mouse_down(win: Int) -> Int
-    fun q_take_scroll_y() -> Int
-    fun q_wait(timeout_ms: Int)
-    fun q_time_ms() -> Int
-    fun q_set_cursor(win: Int, kind: Int)
-    fun q_clear_rgb(r: Int, g: Int, b: Int)
-    fun q_frame_begin(width: Int, height: Int)
-    fun q_fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int)
-    fun q_fill_round_rect(x: Int, y: Int, w: Int, h: Int, radius: Int, r: Int, g: Int, b: Int, a: Int)
-    fun q_push_clip(x: Int, y: Int, w: Int, h: Int)
+    fun q_window_swap(win: int)
+    fun q_window_close(win: int)
+    fun q_framebuffer_width(win: int) -> int
+    fun q_framebuffer_height(win: int) -> int
+    fun q_cursor_x(win: int) -> int
+    fun q_cursor_y(win: int) -> int
+    fun q_mouse_down(win: int) -> int
+    fun q_take_scroll_y() -> int
+    fun q_wait(timeout_ms: int)
+    fun q_time_ms() -> int
+    fun q_set_cursor(win: int, kind: int)
+    fun q_clear_rgb(r: int, g: int, b: int)
+    fun q_frame_begin(width: int, height: int)
+    fun q_fill_rect(x: int, y: int, w: int, h: int, r: int, g: int, b: int, a: int)
+    fun q_fill_round_rect(x: int, y: int, w: int, h: int, radius: int, r: int, g: int, b: int, a: int)
+    fun q_push_clip(x: int, y: int, w: int, h: int)
     fun q_pop_clip()
     fun q_frame_end()
-    fun q_font_load(path: CStr) -> Int
-    fun q_text(font: Int, x: Int, y: Int, px: Int, str: CStr, r: Int, g: Int, b: Int, a: Int)
-    fun q_measure_width(font: Int, px: Int, str: CStr) -> Int
-    fun q_line_height(font: Int, px: Int) -> Int
-    fun q_poll_char() -> Int
-    fun q_poll_key() -> Int
-    fun q_char_utf8(codepoint: Int) -> CStr
-    fun q_image_load(path: CStr) -> Int
-    fun q_image_width(idx: Int) -> Int
-    fun q_image_height(idx: Int) -> Int
-    fun q_draw_image(idx: Int, x: Int, y: Int, w: Int, h: Int)
-    fun q_clipboard_get(win: Int) -> CStr
-    fun q_clipboard_set(win: Int, s: CStr)
+    fun q_font_load(path: CStr) -> int
+    fun q_text(font: int, x: int, y: int, px: int, str: CStr, r: int, g: int, b: int, a: int)
+    fun q_measure_width(font: int, px: int, str: CStr) -> int
+    fun q_line_height(font: int, px: int) -> int
+    fun q_poll_char() -> int
+    fun q_poll_key() -> int
+    fun q_char_utf8(codepoint: int) -> CStr
+    fun q_image_load(path: CStr) -> int
+    fun q_image_width(idx: int) -> int
+    fun q_image_height(idx: int) -> int
+    fun q_draw_image(idx: int, x: int, y: int, w: int, h: int)
+    fun q_clipboard_get(win: int) -> CStr
+    fun q_clipboard_set(win: int, s: CStr)
 }
 
-fun backend_init() -> Bool {
+fun backend_init() -> bool {
     return q_init() == 1
 }
 
@@ -53,21 +53,21 @@ fun backend_terminate() {
 }
 
 // Opens a window with a current GL context, or 0 on failure.
-fun open_window(width: Int, height: Int, title: String) -> Int {
+fun open_window(width: int, height: int, title: str) -> int {
     let c = to_cstr(title)
     let win = q_window_open(width, height, c)
     free_cstr(c)
     return win
 }
 
-fun set_window_icon(win: Int, path: String) -> Bool {
+fun set_window_icon(win: int, path: str) -> bool {
     let c = to_cstr(path)
     let ok = q_window_icon(win, c)
     free_cstr(c)
     return ok == 1
 }
 
-fun window_should_close(win: Int) -> Bool {
+fun window_should_close(win: int) -> bool {
     return q_window_should_close(win) == 1
 }
 
@@ -76,79 +76,79 @@ fun poll_events() {
     return
 }
 
-fun swap_buffers(win: Int) {
+fun swap_buffers(win: int) {
     q_window_swap(win)
     return
 }
 
-fun close_window(win: Int) {
+fun close_window(win: int) {
     q_window_close(win)
     return
 }
 
-fun framebuffer_width(win: Int) -> Int {
+fun framebuffer_width(win: int) -> int {
     return q_framebuffer_width(win)
 }
 
-fun framebuffer_height(win: Int) -> Int {
+fun framebuffer_height(win: int) -> int {
     return q_framebuffer_height(win)
 }
 
-fun cursor_x(win: Int) -> Int {
+fun cursor_x(win: int) -> int {
     return q_cursor_x(win)
 }
 
-fun cursor_y(win: Int) -> Int {
+fun cursor_y(win: int) -> int {
     return q_cursor_y(win)
 }
 
-fun mouse_down(win: Int) -> Bool {
+fun mouse_down(win: int) -> bool {
     return q_mouse_down(win) == 1
 }
 
 // Pixels scrolled vertically since the last call, then reset.
-fun take_scroll_y() -> Int {
+fun take_scroll_y() -> int {
     return q_take_scroll_y()
 }
 
 // Sleep until an event arrives (timeout_ms <= 0) or the timeout elapses.
-fun wait_events(timeout_ms: Int) {
+fun wait_events(timeout_ms: int) {
     q_wait(timeout_ms)
     return
 }
 
 // Milliseconds since the backend started, for animation timing.
-fun time_ms() -> Int {
+fun time_ms() -> int {
     return q_time_ms()
 }
 
 // Cursor shape: 0 arrow, 1 I-beam, 2 hand.
-fun set_cursor(win: Int, kind: Int) {
+fun set_cursor(win: int, kind: int) {
     q_set_cursor(win, kind)
     return
 }
 
-fun clear_rgb(r: Int, g: Int, b: Int) {
+fun clear_rgb(r: int, g: int, b: int) {
     q_clear_rgb(r, g, b)
     return
 }
 
-fun frame_begin(width: Int, height: Int) {
+fun frame_begin(width: int, height: int) {
     q_frame_begin(width, height)
     return
 }
 
-fun fill_rect(x: Int, y: Int, w: Int, h: Int, r: Int, g: Int, b: Int, a: Int) {
+fun fill_rect(x: int, y: int, w: int, h: int, r: int, g: int, b: int, a: int) {
     q_fill_rect(x, y, w, h, r, g, b, a)
     return
 }
 
-fun fill_round_rect(x: Int, y: Int, w: Int, h: Int, radius: Int, r: Int, g: Int, b: Int, a: Int) {
+fun fill_round_rect(x: int, y: int, w: int, h: int, radius: int, r: int, g: int, b: int, a: int) {
     q_fill_round_rect(x, y, w, h, radius, r, g, b, a)
     return
 }
 
-fun push_clip(x: Int, y: Int, w: Int, h: Int) {
+fun push_clip(x: int, y: int, w: int, h: int) {
     q_push_clip(x, y, w, h)
     return
 }
@@ -164,71 +164,71 @@ fun frame_end() {
 }
 
 // Load a TTF from disk. Returns the font id, or -1 on failure.
-fun font_load(path: String) -> Int {
+fun font_load(path: str) -> int {
     let c = to_cstr(path)
     let id = q_font_load(c)
     free_cstr(c)
     return id
 }
 
-fun draw_text(font: Int, x: Int, y: Int, px: Int, s: String, r: Int, g: Int, b: Int, a: Int) {
+fun draw_text(font: int, x: int, y: int, px: int, s: str, r: int, g: int, b: int, a: int) {
     let c = to_cstr(s)
     q_text(font, x, y, px, c, r, g, b, a)
     free_cstr(c)
     return
 }
 
-fun measure_width(font: Int, px: Int, s: String) -> Int {
+fun measure_width(font: int, px: int, s: str) -> int {
     let c = to_cstr(s)
     let w = q_measure_width(font, px, c)
     free_cstr(c)
     return w
 }
 
-fun line_height(font: Int, px: Int) -> Int {
+fun line_height(font: int, px: int) -> int {
     return q_line_height(font, px)
 }
 
 // Next typed character's codepoint, or -1 when the queue is empty.
-fun poll_char() -> Int {
+fun poll_char() -> int {
     return q_poll_char()
 }
 
 // Next pressed edit key (a GLFW key code), or -1 when the queue is empty.
-fun poll_key() -> Int {
+fun poll_key() -> int {
     return q_poll_key()
 }
 
-fun char_utf8(codepoint: Int) -> String {
+fun char_utf8(codepoint: int) -> str {
     return from_cstr(q_char_utf8(codepoint))
 }
 
 // Load an image file into a GL texture. Returns its index, or -1 on failure.
-fun image_load(path: String) -> Int {
+fun image_load(path: str) -> int {
     let c = to_cstr(path)
     let idx = q_image_load(c)
     free_cstr(c)
     return idx
 }
 
-fun image_width(idx: Int) -> Int {
+fun image_width(idx: int) -> int {
     return q_image_width(idx)
 }
 
-fun image_height(idx: Int) -> Int {
+fun image_height(idx: int) -> int {
     return q_image_height(idx)
 }
 
-fun draw_image(idx: Int, x: Int, y: Int, w: Int, h: Int) {
+fun draw_image(idx: int, x: int, y: int, w: int, h: int) {
     q_draw_image(idx, x, y, w, h)
     return
 }
 
-fun clipboard_get(win: Int) -> String {
+fun clipboard_get(win: int) -> str {
     return from_cstr(q_clipboard_get(win))
 }
 
-fun clipboard_set(win: Int, s: String) {
+fun clipboard_set(win: int, s: str) {
     let c = to_cstr(s)
     q_clipboard_set(win, c)
     free_cstr(c)

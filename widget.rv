@@ -4,18 +4,18 @@
 // the dependency runs one way (widget -> layout -> paint), since Raven forbids
 // import cycles. Build a tree with the builders:
 //
-//     import "github.com/martian56/quill/widget" { column, row, label, button, input }
+//     from "github.com/martian56/quill/widget" import column, row, label, button, input
 //
 //     column([label("count: ${m.count}").size(28), button("inc", "Add one")]).pad(24).gap(16)
 
-import "./lib" { Color, Rect, Theme }
-import std/string
-import std/collections { Map }
+from "./lib" import Color, Rect, Theme
+import std.string
+from std.collections import Map
 
 // Slider handle radius, shared by the value query here and the painter. Raven
 // folds consts per module, so layout.rv and paint.rv keep their own tuning
 // constants rather than importing these.
-const SLIDER_R: Int = 9
+let SLIDER_R: int = 9
 
 // Cross-axis alignment of a container's children (align-items).
 enum Align {
@@ -40,48 +40,48 @@ enum WidgetKind {
     Column,
     Row,
     Panel,
-    Scroll(String),
-    Label(String),
-    Button(String, String),
-    Input(String, String),
-    TextArea(String, String),
-    Checkbox(String, Bool, String),
-    Radio(String, Bool, String),
-    Slider(String, Int, Int, Int),
-    Dropdown(String, String, List<String>),
-    Image(Int, Int, Int),
+    Scroll(str),
+    Label(str),
+    Button(str, str),
+    Input(str, str),
+    TextArea(str, str),
+    Checkbox(str, bool, str),
+    Radio(str, bool, str),
+    Slider(str, int, int, int),
+    Dropdown(str, str, list[str]),
+    Image(int, int, int),
     Divider,
-    Modal(String),
+    Modal(str),
 }
 
 // One node of the UI tree. Style is set with the chained modifiers below; mw/mh
 // and box are filled in by layout and read by paint.
-struct Widget {
-    kind: WidgetKind,
-    kids: List<Widget>,
-    flex: Int,
-    inset: Int,
-    spacing: Int,
-    fill: Color?,
-    corner: Int,
-    wfix: Int,
-    hfix: Int,
-    tsize: Int,
-    tint: Color?,
-    cross: Align,
-    main: Justify,
-    enabled: Bool,
-    mw: Int,
-    mh: Int,
-    box: Rect,
-    scroll: Int,
-    tip: String,
+class Widget {
+    kind: WidgetKind
+    kids: list[Widget]
+    flex: int
+    inset: int
+    spacing: int
+    fill: Color?
+    corner: int
+    wfix: int
+    hfix: int
+    tsize: int
+    tint: Color?
+    cross: Align
+    main: Justify
+    enabled: bool
+    mw: int
+    mh: int
+    box: Rect
+    scroll: int
+    tip: str
 }
 
-fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
-    return Widget {
-        kind,
-        kids,
+fun _widget(kind: WidgetKind, kids: list[Widget]) -> Widget {
+    return Widget(
+        kind: kind,
+        kids: kids,
         flex: 0,
         inset: 0,
         spacing: 0,
@@ -96,22 +96,22 @@ fun _widget(kind: WidgetKind, kids: List<Widget>) -> Widget {
         enabled: true,
         mw: 0,
         mh: 0,
-        box: Rect { x: 0, y: 0, w: 0, h: 0 },
+        box: Rect(x: 0, y: 0, w: 0, h: 0),
         scroll: 0,
         tip: "",
-    }
+    )
 }
 
 fun _leaf(kind: WidgetKind) -> Widget {
-    let none: List<Widget> = []
+    let none: list[Widget] = []
     return _widget(kind, none)
 }
 
-fun column(kids: List<Widget>) -> Widget {
+fun column(kids: list[Widget]) -> Widget {
     return _widget(WidgetKind.Column, kids)
 }
 
-fun row(kids: List<Widget>) -> Widget {
+fun row(kids: list[Widget]) -> Widget {
     return _widget(WidgetKind.Row, kids)
 }
 
@@ -122,28 +122,28 @@ fun panel(child: Widget) -> Widget {
 // A vertically scrollable viewport around child. Give it a bounded height (with
 // grow or height); when the content is taller, the mouse wheel scrolls it. id
 // keys its scroll position across frames.
-fun scroll(id: String, child: Widget) -> Widget {
+fun scroll(id: str, child: Widget) -> Widget {
     return _widget(WidgetKind.Scroll(id), [child])
 }
 
 // Overlay dialog centered over base with a dimmed backdrop. The base is not
 // clickable while the modal is open; clicking the backdrop sends
 // Click(dismiss_id). Wrap your view in this only while the dialog is open.
-fun modal(base: Widget, dialog: Widget, dismiss_id: String) -> Widget {
+fun modal(base: Widget, dialog: Widget, dismiss_id: str) -> Widget {
     return _widget(WidgetKind.Modal(dismiss_id), [base, dialog])
 }
 
-fun label(text: String) -> Widget {
+fun label(text: str) -> Widget {
     return _leaf(WidgetKind.Label(text))
 }
 
-fun button(id: String, text: String) -> Widget {
+fun button(id: str, text: str) -> Widget {
     return _leaf(WidgetKind.Button(id, text))
 }
 
 // A single-line text field. value is the current text (from the model); the
 // framework edits it and sends UiEvent.Input(id, new_value).
-fun input(id: String, value: String) -> Widget {
+fun input(id: str, value: str) -> Widget {
     return _leaf(WidgetKind.Input(id, value))
 }
 
@@ -151,36 +151,36 @@ fun input(id: String, value: String) -> Widget {
 // current text (with embedded newlines); the framework edits it, keeps the caret
 // visible, and sends UiEvent.Input(id, new_value). Give it a height (with height
 // or grow) to set how many rows are visible; content past that scrolls.
-fun textarea(id: String, value: String) -> Widget {
+fun textarea(id: str, value: str) -> Widget {
     return _leaf(WidgetKind.TextArea(id, value))
 }
 
 // A labelled checkbox. checked comes from the model; clicking it sends
 // UiEvent.Click(id), so update flips the flag.
-fun checkbox(id: String, checked: Bool, text: String) -> Widget {
+fun checkbox(id: str, checked: bool, text: str) -> Widget {
     return _leaf(WidgetKind.Checkbox(id, checked, text))
 }
 
 // A labelled radio button. selected comes from the model; clicking it sends
 // UiEvent.Click(id), so update sets the group's value to id.
-fun radio(id: String, selected: Bool, text: String) -> Widget {
+fun radio(id: str, selected: bool, text: str) -> Widget {
     return _leaf(WidgetKind.Radio(id, selected, text))
 }
 
 // A horizontal slider from lo to hi. value comes from the model; dragging the
 // handle sends UiEvent.Slide(id, new_value).
-fun slider(id: String, value: Int, lo: Int, hi: Int) -> Widget {
+fun slider(id: str, value: int, lo: int, hi: int) -> Widget {
     return _leaf(WidgetKind.Slider(id, value, lo, hi))
 }
 
 // A dropdown showing selected, opening a menu of options below it. Clicking the
 // trigger opens it; picking an option sends UiEvent.Select(id, option).
-fun dropdown(id: String, selected: String, options: List<String>) -> Widget {
+fun dropdown(id: str, selected: str, options: list[str]) -> Widget {
     return _leaf(WidgetKind.Dropdown(id, selected, options))
 }
 
 // Draw a loaded image (Image.load(...).id) at w by h pixels.
-fun image(handle: Int, w: Int, h: Int) -> Widget {
+fun image(handle: int, w: int, h: int) -> Widget {
     return _leaf(WidgetKind.Image(handle, w, h))
 }
 
@@ -192,12 +192,12 @@ fun divider() -> Widget {
 // A tab bar built from buttons: the active tab is filled with the accent, the
 // rest are muted. Clicking a tab sends Click("<id>:<label>"), so update can set
 // the active tab (see tab_of to read the label back).
-fun tabs(id: String, active: String, labels: List<String>, theme: Theme) -> Widget {
-    let items: List<Widget> = []
-    let i = 0
+fun tabs(id: str, active: str, labels: list[str], theme: Theme) -> Widget {
+    let items: list[Widget] = []
+    var i = 0
     while i < labels.len() {
         let lbl = labels[i]
-        let b = button("${id}:${lbl}", lbl)
+        var b = button("${id}:${lbl}", lbl)
         if lbl == active {
             b = b.bg(theme.accent).color(theme.on_accent)
         } else {
@@ -210,7 +210,7 @@ fun tabs(id: String, active: String, labels: List<String>, theme: Theme) -> Widg
 }
 
 // The tab label from a "<id>:<label>" click id, for use in update.
-fun tab_of(click_id: String) -> String {
+fun tab_of(click_id: str) -> str {
     let n = click_id.index_of(":")
     if n < 0 {
         return ""
@@ -221,17 +221,17 @@ fun tab_of(click_id: String) -> String {
 // Chained modifiers. Each mutates and returns the node, so they compose:
 // column([...]).pad(24).gap(16).bg(theme.surface).rounded(16).
 impl Widget {
-    fun grow(self, weight: Int) -> Widget {
+    fun grow(self, weight: int) -> Widget {
         self.flex = weight
         return self
     }
 
-    fun pad(self, n: Int) -> Widget {
+    fun pad(self, n: int) -> Widget {
         self.inset = n
         return self
     }
 
-    fun gap(self, n: Int) -> Widget {
+    fun gap(self, n: int) -> Widget {
         self.spacing = n
         return self
     }
@@ -241,22 +241,22 @@ impl Widget {
         return self
     }
 
-    fun rounded(self, r: Int) -> Widget {
+    fun rounded(self, r: int) -> Widget {
         self.corner = r
         return self
     }
 
-    fun width(self, n: Int) -> Widget {
+    fun width(self, n: int) -> Widget {
         self.wfix = n
         return self
     }
 
-    fun height(self, n: Int) -> Widget {
+    fun height(self, n: int) -> Widget {
         self.hfix = n
         return self
     }
 
-    fun size(self, n: Int) -> Widget {
+    fun size(self, n: int) -> Widget {
         self.tsize = n
         return self
     }
@@ -285,138 +285,138 @@ impl Widget {
     }
 
     // Show this text in a small popup after the cursor rests on the widget.
-    fun tip(self, text: String) -> Widget {
+    fun tip(self, text: str) -> Widget {
         self.tip = text
         return self
     }
 }
 
-fun _contains(r: Rect, x: Int, y: Int) -> Bool {
-    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
+fun _contains(r: Rect, x: int, y: int) -> bool {
+    return x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h
 }
 
 // A hit-tested target: an interactive widget's id, whether it is a text input,
 // and whether it is dragged (a slider) rather than clicked.
-struct Hit {
-    id: String,
-    input: Bool,
-    drag: Bool,
+class Hit {
+    id: str
+    input: bool
+    drag: bool
 }
 
 // The topmost interactive widget under (x, y), if any.
-fun _hit(w: Widget, x: Int, y: Int) -> Hit? {
+fun _hit(w: Widget, x: int, y: int) -> Hit? {
     // A modal hit-tests its dialog, then swallows any other click as a dismiss,
     // so the base underneath is never reached. A scroll viewport clips
     // hit-testing to its box, so off-screen children are not clickable.
     match w.kind {
-        Modal(id) -> {
+        case Modal(id) {
             return _hit_modal(w, id, x, y)
-        },
-        Scroll(id) -> {
-            if !_contains(w.box, x, y) {
+        }
+        case Scroll(id) {
+            if not _contains(w.box, x, y) {
                 return None
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         match _hit(w.kids[i], x, y) {
-            Some(h) -> {
+            case Some(h) {
                 return Some(h)
-            },
-            None -> {},
+            }
+            case None {}
         }
         i = i + 1
     }
-    if !w.enabled {
+    if not w.enabled {
         return None
     }
     match w.kind {
-        Button(id, text) -> {
+        case Button(id, text) {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: false, drag: false })
+                return Some(Hit(id: id, input: false, drag: false))
             }
-        },
-        Input(id, value) -> {
+        }
+        case Input(id, value) {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: true, drag: false })
+                return Some(Hit(id: id, input: true, drag: false))
             }
-        },
-        TextArea(id, value) -> {
+        }
+        case TextArea(id, value) {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: true, drag: false })
+                return Some(Hit(id: id, input: true, drag: false))
             }
-        },
-        Checkbox(id, checked, text) -> {
+        }
+        case Checkbox(id, checked, text) {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: false, drag: false })
+                return Some(Hit(id: id, input: false, drag: false))
             }
-        },
-        Radio(id, selected, text) -> {
+        }
+        case Radio(id, selected, text) {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: false, drag: false })
+                return Some(Hit(id: id, input: false, drag: false))
             }
-        },
-        Slider(id, value, lo, hi) -> {
+        }
+        case Slider(id, value, lo, hi) {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: false, drag: true })
+                return Some(Hit(id: id, input: false, drag: true))
             }
-        },
-        Dropdown(id, selected, options) -> {
+        }
+        case Dropdown(id, selected, options) {
             if _contains(w.box, x, y) {
-                return Some(Hit { id, input: false, drag: false })
+                return Some(Hit(id: id, input: false, drag: false))
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
     return None
 }
 
 // The deepest widget carrying a tooltip under (x, y), if any. Scroll viewports
 // clip the search to their box so a scrolled-out widget shows no tip.
-fun _tip_at(w: Widget, x: Int, y: Int) -> Widget? {
+fun _tip_at(w: Widget, x: int, y: int) -> Widget? {
     match w.kind {
-        Scroll(id) -> {
-            if !_contains(w.box, x, y) {
+        case Scroll(id) {
+            if not _contains(w.box, x, y) {
                 return None
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         match _tip_at(w.kids[i], x, y) {
-            Some(t) -> {
+            case Some(t) {
                 return Some(t)
-            },
-            None -> {},
+            }
+            case None {}
         }
         i = i + 1
     }
-    if w.tip != "" && _contains(w.box, x, y) {
+    if w.tip != "" and _contains(w.box, x, y) {
         return Some(w)
     }
     return None
 }
 
 // The dropdown widget with this id, if present (carries its box and options).
-fun _find_dropdown(w: Widget, id: String) -> Widget? {
+fun _find_dropdown(w: Widget, id: str) -> Widget? {
     match w.kind {
-        Dropdown(did, selected, options) -> {
+        case Dropdown(did, selected, options) {
             if did == id {
                 return Some(w)
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         match _find_dropdown(w.kids[i], id) {
-            Some(d) -> {
+            case Some(d) {
                 return Some(d)
-            },
-            None -> {},
+            }
+            case None {}
         }
         i = i + 1
     }
@@ -424,44 +424,44 @@ fun _find_dropdown(w: Widget, id: String) -> Widget? {
 }
 
 // The nth option of a dropdown widget.
-fun _dd_option(w: Widget, i: Int) -> String {
+fun _dd_option(w: Widget, i: int) -> str {
     return match w.kind {
-        Dropdown(id, selected, options) -> options[i],
-        _ -> "",
+        case Dropdown(id, selected, options) { options[i] }
+        case _ { "" }
     }
 }
 
-fun _dd_count(w: Widget) -> Int {
+fun _dd_count(w: Widget) -> int {
     return match w.kind {
-        Dropdown(id, selected, options) -> options.len(),
-        _ -> 0,
+        case Dropdown(id, selected, options) { options.len() }
+        case _ { 0 }
     }
 }
 
-fun _hit_modal(w: Widget, id: String, x: Int, y: Int) -> Hit? {
+fun _hit_modal(w: Widget, id: str, x: int, y: int) -> Hit? {
     if w.kids.len() >= 2 {
         match _hit(w.kids[1], x, y) {
-            Some(h) -> {
+            case Some(h) {
                 return Some(h)
-            },
-            None -> {},
+            }
+            case None {}
         }
     }
     if _contains(w.box, x, y) {
-        return Some(Hit { id, input: false, drag: false })
+        return Some(Hit(id: id, input: false, drag: false))
     }
     return None
 }
 
 // Inject each scroll container's saved offset before layout.
-fun _apply_scroll(w: Widget, offsets: Map<String, Int>) {
+fun _apply_scroll(w: Widget, offsets: dict[str, int]) {
     match w.kind {
-        Scroll(id) -> {
+        case Scroll(id) {
             w.scroll = offsets.get_or(id, 0)
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         _apply_scroll(w.kids[i], offsets)
         i = i + 1
@@ -470,37 +470,37 @@ fun _apply_scroll(w: Widget, offsets: Map<String, Int>) {
 }
 
 // The innermost scroll container under (x, y), if any.
-fun _scroll_at(w: Widget, x: Int, y: Int) -> Widget? {
-    let i = 0
+fun _scroll_at(w: Widget, x: int, y: int) -> Widget? {
+    var i = 0
     while i < w.kids.len() {
         match _scroll_at(w.kids[i], x, y) {
-            Some(s) -> {
+            case Some(s) {
                 return Some(s)
-            },
-            None -> {},
+            }
+            case None {}
         }
         i = i + 1
     }
     match w.kind {
-        Scroll(id) -> {
+        case Scroll(id) {
             if _contains(w.box, x, y) {
                 return Some(w)
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
     return None
 }
 
-fun _scroll_id(w: Widget) -> String {
+fun _scroll_id(w: Widget) -> str {
     return match w.kind {
-        Scroll(id) -> id,
-        _ -> "",
+        case Scroll(id) { id }
+        case _ { "" }
     }
 }
 
 // The scrollable overshoot (content height beyond the viewport) of a scroll box.
-fun _scroll_extent(w: Widget) -> Int {
+fun _scroll_extent(w: Widget) -> int {
     if w.kids.len() == 0 {
         return 0
     }
@@ -512,23 +512,19 @@ fun _scroll_extent(w: Widget) -> Int {
 }
 
 // Every input id in tree (tab) order.
-fun _focusables(w: Widget) -> List<String> {
-    let out: List<String> = []
+fun _focusables(w: Widget) -> list[str] {
+    let out: list[str] = []
     _collect_focusables(w, out)
     return out
 }
 
-fun _collect_focusables(w: Widget, out: List<String>) {
+fun _collect_focusables(w: Widget, out: list[str]) {
     match w.kind {
-        Input(id, value) -> {
-            out.push(id)
-        },
-        TextArea(id, value) -> {
-            out.push(id)
-        },
-        _ -> {},
+        case Input(id, value) { out.push(id) }
+        case TextArea(id, value) { out.push(id) }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         _collect_focusables(w.kids[i], out)
         i = i + 1
@@ -538,14 +534,14 @@ fun _collect_focusables(w: Widget, out: List<String>) {
 
 // The input to focus after current when Tab is pressed, wrapping around; the
 // first input when nothing is focused, or None when there are no inputs.
-fun _next_focus(w: Widget, current: String?) -> String? {
+fun _next_focus(w: Widget, current: str?) -> str? {
     let ids = _focusables(w)
     if ids.len() == 0 {
         return None
     }
     match current {
-        Some(cur) -> {
-            let i = 0
+        case Some(cur) {
+            var i = 0
             while i < ids.len() {
                 if ids[i] == cur {
                     return Some(ids[(i + 1) % ids.len()])
@@ -553,24 +549,24 @@ fun _next_focus(w: Widget, current: String?) -> String? {
                 i = i + 1
             }
             return Some(ids[0])
-        },
-        None -> {
+        }
+        case None {
             return Some(ids[0])
-        },
+        }
     }
     return None
 }
 
 // The slider value for a cursor x, if the slider with this id is in the tree.
-fun _slider_value_at(w: Widget, id: String, x: Int) -> Int? {
+fun _slider_value_at(w: Widget, id: str, x: int) -> int? {
     match w.kind {
-        Slider(sid, value, lo, hi) -> {
+        case Slider(sid, value, lo, hi) {
             if sid == id {
                 let usable = w.box.w - 2 * SLIDER_R
                 if usable <= 0 {
                     return Some(lo)
                 }
-                let rel = x - w.box.x - SLIDER_R
+                var rel = x - w.box.x - SLIDER_R
                 if rel < 0 {
                     rel = 0
                 }
@@ -579,16 +575,16 @@ fun _slider_value_at(w: Widget, id: String, x: Int) -> Int? {
                 }
                 return Some(lo + (rel * (hi - lo) + usable / 2) / usable)
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         match _slider_value_at(w.kids[i], id, x) {
-            Some(v) -> {
+            case Some(v) {
                 return Some(v)
-            },
-            None -> {},
+            }
+            case None {}
         }
         i = i + 1
     }
@@ -597,27 +593,27 @@ fun _slider_value_at(w: Widget, id: String, x: Int) -> Int? {
 
 // The input or text area with this id, if present (carries its box and value for
 // focus, click-to-caret, and editing).
-fun _find_input(w: Widget, id: String) -> Widget? {
+fun _find_input(w: Widget, id: str) -> Widget? {
     match w.kind {
-        Input(iid, value) -> {
+        case Input(iid, value) {
             if iid == id {
                 return Some(w)
             }
-        },
-        TextArea(iid, value) -> {
+        }
+        case TextArea(iid, value) {
             if iid == id {
                 return Some(w)
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         match _find_input(w.kids[i], id) {
-            Some(inp) -> {
+            case Some(inp) {
                 return Some(inp)
-            },
-            None -> {},
+            }
+            case None {}
         }
         i = i + 1
     }
@@ -625,27 +621,27 @@ fun _find_input(w: Widget, id: String) -> Widget? {
 }
 
 // The current text of the input or text area with this id, if present.
-fun _find_input_value(w: Widget, id: String) -> String? {
+fun _find_input_value(w: Widget, id: str) -> str? {
     match w.kind {
-        Input(iid, value) -> {
+        case Input(iid, value) {
             if iid == id {
                 return Some(value)
             }
-        },
-        TextArea(iid, value) -> {
+        }
+        case TextArea(iid, value) {
             if iid == id {
                 return Some(value)
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
-    let i = 0
+    var i = 0
     while i < w.kids.len() {
         match _find_input_value(w.kids[i], id) {
-            Some(v) -> {
+            case Some(v) {
                 return Some(v)
-            },
-            None -> {},
+            }
+            case None {}
         }
         i = i + 1
     }
@@ -654,19 +650,19 @@ fun _find_input_value(w: Widget, id: String) -> String? {
 
 // Drop the last UTF-8 character, skipping continuation bytes so multi-byte
 // characters are removed whole.
-fun _drop_last(s: String) -> String {
+fun _drop_last(s: str) -> str {
     let n = s.length()
     if n == 0 {
         return s
     }
-    let cut = n - 1
-    let scanning = true
+    var cut = n - 1
+    var scanning = true
     while scanning {
         if cut == 0 {
             scanning = false
         } else {
             let b = s.byte_at(cut)
-            if b >= 128 && b < 192 {
+            if b >= 128 and b < 192 {
                 cut = cut - 1
             } else {
                 scanning = false

@@ -1,18 +1,18 @@
 // quill: a GUI framework for Raven. An app is three pure functions over a
 // model, quill owns the window and the frame loop:
 //
-//     import "github.com/martian56/quill" {
+//     from "github.com/martian56/quill" import
 //         App, Event, Frame, Step, Color, WindowConfig, next, quit, run
-//     }
 //
-//     struct Model { ticks: Int }
+//
+//     class Model { ticks: int }
 //
 //     fun init() -> Model {
-//         return Model { ticks: 0 }
+//         return Model(ticks: 0)
 //     }
 //
-//     fun update(m: Model, e: Event) -> Step<Model> {
-//         return next(Model { ticks: m.ticks + 1 })
+//     fun update(m: Model, e: Event) -> Step[Model] {
+//         return next(Model(ticks: m.ticks + 1))
 //     }
 //
 //     fun view(m: Model, f: Frame) {
@@ -21,118 +21,118 @@
 //
 //     fun main() {
 //         let win = WindowConfig.new().size(960, 600).title("quill")
-//         run<Model>(App { init: init, update: update, view: view, window: win })
+//         run[Model](App(init: init, update: update, view: view, window: win))
 //     }
 
-import "./backend/sys" { backend_init, backend_terminate, open_window, set_window_icon, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, take_scroll_y, wait_events, time_ms, set_cursor, poll_char, poll_key, char_utf8, clipboard_get, clipboard_set, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height, image_load, image_width, image_height, draw_image }
+from "./backend/sys" import backend_init, backend_terminate, open_window, set_window_icon, window_should_close, poll_events, swap_buffers, close_window, framebuffer_width, framebuffer_height, cursor_x, cursor_y, mouse_down, take_scroll_y, wait_events, time_ms, set_cursor, poll_char, poll_key, char_utf8, clipboard_get, clipboard_set, clear_rgb, frame_begin, fill_rect, fill_round_rect, push_clip, pop_clip, frame_end, font_load, draw_text, measure_width, line_height, image_load, image_width, image_height, draw_image
 
 // An 8-bit-per-channel opaque color.
-struct Color {
-    r: Int,
-    g: Int,
-    b: Int,
+class Color {
+    r: int
+    g: int
+    b: int
 }
 
 impl Color {
-    fun rgb(r: Int, g: Int, b: Int) -> Color {
-        return Color { r, g, b }
+    fun rgb(r: int, g: int, b: int) -> Color {
+        return Color(r: r, g: g, b: b)
     }
 
     // Move each channel pct percent toward white.
-    fun lighten(self, pct: Int) -> Color {
-        return Color {
+    fun lighten(self, pct: int) -> Color {
+        return Color(
             r: self.r + (255 - self.r) * pct / 100,
             g: self.g + (255 - self.g) * pct / 100,
             b: self.b + (255 - self.b) * pct / 100,
-        }
+        )
     }
 
     // Move each channel pct percent toward black.
-    fun darken(self, pct: Int) -> Color {
-        return Color {
+    fun darken(self, pct: int) -> Color {
+        return Color(
             r: self.r - self.r * pct / 100,
             g: self.g - self.g * pct / 100,
             b: self.b - self.b * pct / 100,
-        }
+        )
     }
 }
 
 // A rectangle in pixels from the top-left, used by layout.
-struct Rect {
-    x: Int,
-    y: Int,
-    w: Int,
-    h: Int,
+class Rect {
+    x: int
+    y: int
+    w: int
+    h: int
 }
 
 impl Rect {
     // The rect shrunk by n on every side.
-    fun inset(self, n: Int) -> Rect {
-        return Rect { x: self.x + n, y: self.y + n, w: self.w - 2 * n, h: self.h - 2 * n }
+    fun inset(self, n: int) -> Rect {
+        return Rect(x: self.x + n, y: self.y + n, w: self.w - 2 * n, h: self.h - 2 * n)
     }
 }
 
 // A loaded font. Load once (in init) and reuse; drawing with an unloaded font
 // is a no-op.
-struct Font {
-    id: Int,
+class Font {
+    id: int
 }
 
 impl Font {
-    fun load(path: String) -> Font {
-        return Font { id: font_load(path) }
+    fun load(path: str) -> Font {
+        return Font(id: font_load(path))
     }
 
-    fun ok(self) -> Bool {
+    fun ok(self) -> bool {
         return self.id >= 0
     }
 
     // Pixel width of s at the given size, for laying text out.
-    fun width(self, size: Int, s: String) -> Int {
+    fun width(self, size: int, s: str) -> int {
         return measure_width(self.id, size, s)
     }
 
     // Pixel height of one line at the given size.
-    fun line_height(self, size: Int) -> Int {
+    fun line_height(self, size: int) -> int {
         return line_height(self.id, size)
     }
 }
 
 // A loaded image. Load once (in init), then draw it. w and h are its pixels.
-struct Image {
-    id: Int,
-    w: Int,
-    h: Int,
+class Image {
+    id: int
+    w: int
+    h: int
 }
 
 impl Image {
-    fun load(path: String) -> Image {
+    fun load(path: str) -> Image {
         let id = image_load(path)
-        return Image { id, w: image_width(id), h: image_height(id) }
+        return Image(id: id, w: image_width(id), h: image_height(id))
     }
 
-    fun ok(self) -> Bool {
+    fun ok(self) -> bool {
         return self.id >= 0
     }
 }
 
 // The palette and font widgets draw with. Build one with Theme.dark(font).
-struct Theme {
-    font: Font,
-    bg: Color,
-    surface: Color,
-    field: Color,
-    text: Color,
-    muted: Color,
-    accent: Color,
-    on_accent: Color,
-    border: Color,
+class Theme {
+    font: Font
+    bg: Color
+    surface: Color
+    field: Color
+    text: Color
+    muted: Color
+    accent: Color
+    on_accent: Color
+    border: Color
 }
 
 impl Theme {
     fun dark(font: Font) -> Theme {
-        return Theme {
-            font,
+        return Theme(
+            font: font,
             bg: Color.rgb(20, 22, 28),
             surface: Color.rgb(32, 36, 46),
             field: Color.rgb(45, 50, 62),
@@ -141,12 +141,12 @@ impl Theme {
             accent: Color.rgb(90, 140, 240),
             on_accent: Color.rgb(245, 247, 252),
             border: Color.rgb(52, 58, 70),
-        }
+        )
     }
 
     fun light(font: Font) -> Theme {
-        return Theme {
-            font,
+        return Theme(
+            font: font,
             bg: Color.rgb(244, 246, 249),
             surface: Color.rgb(255, 255, 255),
             field: Color.rgb(236, 239, 243),
@@ -155,68 +155,63 @@ impl Theme {
             accent: Color.rgb(58, 118, 228),
             on_accent: Color.rgb(255, 255, 255),
             border: Color.rgb(223, 227, 233),
-        }
+        )
     }
 }
 
 // A run of text to draw. Build it fluently: Text.new(font, "hi").at(x, y).size(n).
-struct Text {
-    font: Font,
-    x: Int,
-    y: Int,
-    px: Int,
-    s: String,
-    color: Color,
+class Text {
+    font: Font
+    x: int
+    y: int
+    px: int
+    s: str
+    color: Color
 }
 
 impl Text {
-    fun new(font: Font, s: String) -> Text {
-        return Text { font, x: 0, y: 0, px: 16, s, color: Color.rgb(235, 235, 240) }
+    fun new(font: Font, s: str) -> Text {
+        return Text(font: font, x: 0, y: 0, px: 16, s: s, color: Color.rgb(235, 235, 240))
     }
 
-    fun at(self, x: Int, y: Int) -> Text {
-        return Text { font: self.font, x, y, px: self.px, s: self.s, color: self.color }
+    fun at(self, x: int, y: int) -> Text {
+        return Text(font: self.font, x: x, y: y, px: self.px, s: self.s, color: self.color)
     }
 
-    fun size(self, px: Int) -> Text {
-        return Text { font: self.font, x: self.x, y: self.y, px, s: self.s, color: self.color }
+    fun size(self, px: int) -> Text {
+        return Text(font: self.font, x: self.x, y: self.y, px: px, s: self.s, color: self.color)
     }
 
     fun color(self, c: Color) -> Text {
-        return Text { font: self.font, x: self.x, y: self.y, px: self.px, s: self.s, color: c }
+        return Text(font: self.font, x: self.x, y: self.y, px: self.px, s: self.s, color: c)
     }
 }
 
 // How the window is created. Build it fluently from WindowConfig.new().
-struct WindowConfig {
-    width: Int,
-    height: Int,
-    title: String,
-    icon: String,
+class WindowConfig {
+    width: int
+    height: int
+    title: str
+    icon: str
 }
 
 impl WindowConfig {
     fun new() -> WindowConfig {
-        return WindowConfig { width: 960, height: 600, title: "quill", icon: "" }
+        return WindowConfig(width: 960, height: 600, title: "quill", icon: "")
     }
 
-    fun size(self, width: Int, height: Int) -> WindowConfig {
-        return WindowConfig { width, height, title: self.title, icon: self.icon }
+    fun size(self, width: int, height: int) -> WindowConfig {
+        return WindowConfig(width: width, height: height, title: self.title, icon: self.icon)
     }
 
-    fun title(self, title: String) -> WindowConfig {
-        return WindowConfig { width: self.width, height: self.height, title, icon: self.icon }
+    fun title(self, title: str) -> WindowConfig {
+        return WindowConfig(width: self.width, height: self.height, title: title, icon: self.icon)
     }
 
     // Use a PNG on disk as the window and taskbar icon instead of the bundled
     // quill mark. The path is resolved when the window opens.
-    fun icon(self, path: String) -> WindowConfig {
-        return WindowConfig {
-            width: self.width,
-            height: self.height,
-            title: self.title,
-            icon: path,
-        }
+    fun icon(self, path: str) -> WindowConfig {
+        return WindowConfig(width: self.width, height: self.height, title: self.title, icon: path)
     }
 }
 
@@ -224,29 +219,29 @@ impl WindowConfig {
 // with the new framebuffer size; Close fires when the window is dismissed.
 enum Event {
     Tick,
-    Resize(Int, Int),
+    Resize(int, int),
     Close,
 }
 
 // What update returns: the model to carry forward, and whether to stop. Build
 // it with next or quit.
-struct Step<M> {
-    model: M,
-    quit: Bool,
+class Step[M] {
+    model: M
+    quit: bool
 }
 
-fun next<M>(m: M) -> Step<M> {
-    return Step { model: m, quit: false }
+fun next[M](m: M) -> Step[M] {
+    return Step(model: m, quit: false)
 }
 
-fun quit<M>(m: M) -> Step<M> {
-    return Step { model: m, quit: true }
+fun quit[M](m: M) -> Step[M] {
+    return Step(model: m, quit: true)
 }
 
 // The surface a view draws one frame onto.
-struct Frame {
-    width: Int,
-    height: Int,
+class Frame {
+    width: int
+    height: int
 }
 
 impl Frame {
@@ -256,25 +251,25 @@ impl Frame {
     }
 
     // Fill an axis-aligned rectangle, in pixels from the top-left.
-    fun rect(self, x: Int, y: Int, w: Int, h: Int, c: Color) {
+    fun rect(self, x: int, y: int, w: int, h: int, c: Color) {
         fill_rect(x, y, w, h, c.r, c.g, c.b, 255)
         return
     }
 
     // Fill a rectangle with an alpha (0 transparent, 255 opaque), for overlays.
-    fun rect_alpha(self, x: Int, y: Int, w: Int, h: Int, c: Color, alpha: Int) {
+    fun rect_alpha(self, x: int, y: int, w: int, h: int, c: Color, alpha: int) {
         fill_rect(x, y, w, h, c.r, c.g, c.b, alpha)
         return
     }
 
     // Fill a rectangle with rounded corners of the given radius.
-    fun rounded_rect(self, x: Int, y: Int, w: Int, h: Int, radius: Int, c: Color) {
+    fun rounded_rect(self, x: int, y: int, w: int, h: int, radius: int, c: Color) {
         fill_round_rect(x, y, w, h, radius, c.r, c.g, c.b, 255)
         return
     }
 
     // Restrict drawing to a rectangle until unclip; clips nest.
-    fun clip(self, x: Int, y: Int, w: Int, h: Int) {
+    fun clip(self, x: int, y: int, w: int, h: int) {
         push_clip(x, y, w, h)
         return
     }
@@ -291,24 +286,24 @@ impl Frame {
     }
 
     // Draw a loaded image (by handle) into a rectangle.
-    fun image(self, handle: Int, x: Int, y: Int, w: Int, h: Int) {
+    fun image(self, handle: int, x: int, y: int, w: int, h: int) {
         draw_image(handle, x, y, w, h)
         return
     }
 }
 
 // A whole application: pure functions over a model, plus the window to open.
-struct App<M> {
-    init: fun() -> M,
-    update: fun(M, Event) -> Step<M>,
-    view: fun(M, Frame) -> Unit,
-    window: WindowConfig,
+class App[M] {
+    init: fun() -> M
+    update: fun(M, Event) -> Step[M]
+    view: fun(M, Frame) -> Unit
+    window: WindowConfig
 }
 
 // Open the window and run the app until update quits or the window closes.
 // Returns false without opening anything when the backend cannot start.
-fun run<M>(app: App<M>) -> Bool {
-    if !backend_init() {
+fun run[M](app: App[M]) -> bool {
+    if not backend_init() {
         return false
     }
     let cfg = app.window
@@ -321,10 +316,10 @@ fun run<M>(app: App<M>) -> Bool {
         let applied = set_window_icon(win, cfg.icon)
     }
 
-    let model = (app.init)()
-    let last_w = framebuffer_width(win)
-    let last_h = framebuffer_height(win)
-    let running = true
+    var model = (app.init)()
+    var last_w = framebuffer_width(win)
+    var last_h = framebuffer_height(win)
+    var running = true
     while running {
         if window_should_close(win) {
             let closed = (app.update)(model, Event.Close)
@@ -333,7 +328,7 @@ fun run<M>(app: App<M>) -> Bool {
         } else {
             let w = framebuffer_width(win)
             let h = framebuffer_height(win)
-            if w != last_w || h != last_h {
+            if w != last_w or h != last_h {
                 let resized = (app.update)(model, Event.Resize(w, h))
                 model = resized.model
                 last_w = w
@@ -349,7 +344,7 @@ fun run<M>(app: App<M>) -> Bool {
         let fw = framebuffer_width(win)
         let fh = framebuffer_height(win)
         frame_begin(fw, fh)
-        let frame = Frame { width: fw, height: fh }
+        let frame = Frame(width: fw, height: fh)
         (app.view)(model, frame)
         frame_end()
         swap_buffers(win)
@@ -364,7 +359,7 @@ fun run<M>(app: App<M>) -> Bool {
 // Bring the windowing backend up and down. Call start before opening any
 // Window, and stop after closing it. run does this for you; use these only when
 // driving your own loop with Window.
-fun start() -> Bool {
+fun start() -> bool {
     return backend_init()
 }
 
@@ -385,92 +380,92 @@ fun stop() {
 //     }
 //     win.close()
 //     stop()
-struct Window {
-    handle: Int,
+class Window {
+    handle: int
 }
 
 impl Window {
     fun open(cfg: WindowConfig) -> Window {
         let h = open_window(cfg.width, cfg.height, cfg.title)
-        if h != 0 && cfg.icon != "" {
+        if h != 0 and cfg.icon != "" {
             let applied = set_window_icon(h, cfg.icon)
         }
-        return Window { handle: h }
+        return Window(handle: h)
     }
 
-    fun ok(self) -> Bool {
+    fun ok(self) -> bool {
         return self.handle != 0
     }
 
-    fun should_close(self) -> Bool {
+    fun should_close(self) -> bool {
         return window_should_close(self.handle)
     }
 
-    fun width(self) -> Int {
+    fun width(self) -> int {
         return framebuffer_width(self.handle)
     }
 
-    fun height(self) -> Int {
+    fun height(self) -> int {
         return framebuffer_height(self.handle)
     }
 
-    fun mouse_x(self) -> Int {
+    fun mouse_x(self) -> int {
         return cursor_x(self.handle)
     }
 
-    fun mouse_y(self) -> Int {
+    fun mouse_y(self) -> int {
         return cursor_y(self.handle)
     }
 
-    fun mouse_down(self) -> Bool {
+    fun mouse_down(self) -> bool {
         return mouse_down(self.handle)
     }
 
     // Next typed character's codepoint, or -1 when nothing is queued.
-    fun poll_char(self) -> Int {
+    fun poll_char(self) -> int {
         return poll_char()
     }
 
     // Next pressed edit key (a GLFW key code), or -1 when nothing is queued.
-    fun poll_key(self) -> Int {
+    fun poll_key(self) -> int {
         return poll_key()
     }
 
     // A codepoint from poll_char as a UTF-8 string.
-    fun char_utf8(self, codepoint: Int) -> String {
+    fun char_utf8(self, codepoint: int) -> str {
         return char_utf8(codepoint)
     }
 
     // The system clipboard text.
-    fun clipboard(self) -> String {
+    fun clipboard(self) -> str {
         return clipboard_get(self.handle)
     }
 
     // Put text on the system clipboard.
-    fun set_clipboard(self, s: String) {
+    fun set_clipboard(self, s: str) {
         clipboard_set(self.handle, s)
         return
     }
 
     // Pixels scrolled vertically since the last call, then reset.
-    fun scroll_y(self) -> Int {
+    fun scroll_y(self) -> int {
         return take_scroll_y()
     }
 
     // Milliseconds since startup, for animation timing.
-    fun time_ms(self) -> Int {
+    fun time_ms(self) -> int {
         return time_ms()
     }
 
     // Sleep until an event arrives (timeout_ms <= 0) or the timeout elapses,
     // then process input. Lets an idle app rest instead of spinning.
-    fun wait(self, timeout_ms: Int) {
+    fun wait(self, timeout_ms: int) {
         wait_events(timeout_ms)
         return
     }
 
     // Set the mouse cursor shape: 0 arrow, 1 I-beam, 2 hand.
-    fun cursor(self, kind: Int) {
+    fun cursor(self, kind: int) {
         set_cursor(self.handle, kind)
         return
     }
@@ -486,7 +481,7 @@ impl Window {
         let w = framebuffer_width(self.handle)
         let h = framebuffer_height(self.handle)
         frame_begin(w, h)
-        return Frame { width: w, height: h }
+        return Frame(width: w, height: h)
     }
 
     // Flush the frame and show it. Pump input separately with wait or poll.

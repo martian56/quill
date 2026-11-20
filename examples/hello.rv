@@ -1,46 +1,46 @@
-import "../lib" { Font, Theme, WindowConfig }
-import "../widget" { Widget, column, row, panel, label, button, input }
-import "../app" { UiEvent, UiApp, run_ui }
+from "../lib" import Font, Theme, WindowConfig
+from "../widget" import Widget, column, row, panel, label, button, input
+from "../app" import UiEvent, UiApp, run_ui
 
-struct Model {
-    count: Int,
-    name: String,
-    theme: Theme,
+class Model {
+    count: int
+    name: str
+    theme: Theme
 }
 
 fun hello_init() -> Model {
     let font = Font.load("assets/fonts/Go-Regular.ttf")
-    return Model { count: 0, name: "", theme: Theme.dark(font) }
+    return Model(count: 0, name: "", theme: Theme.dark(font))
 }
 
-fun _on_click(m: Model, id: String) -> Model {
+fun _on_click(m: Model, id: str) -> Model {
     if id == "inc" {
-        return Model { count: m.count + 1, name: m.name, theme: m.theme }
+        return Model(count: m.count + 1, name: m.name, theme: m.theme)
     }
     if id == "dec" {
-        return Model { count: m.count - 1, name: m.name, theme: m.theme }
+        return Model(count: m.count - 1, name: m.name, theme: m.theme)
     }
     if id == "reset" {
-        return Model { count: 0, name: m.name, theme: m.theme }
+        return Model(count: 0, name: m.name, theme: m.theme)
     }
     return m
 }
 
-fun _on_input(m: Model, id: String, s: String) -> Model {
+fun _on_input(m: Model, id: str, s: str) -> Model {
     if id == "name" {
-        return Model { count: m.count, name: s, theme: m.theme }
+        return Model(count: m.count, name: s, theme: m.theme)
     }
     return m
 }
 
 fun hello_update(m: Model, e: UiEvent) -> Model {
     return match e {
-        Click(id) -> _on_click(m, id),
-        Input(id, s) -> _on_input(m, id, s),
-        Submit(id) -> m,
-        Slide(id, v) -> m,
-        Select(id, opt) -> m,
-        Tick -> m,
+        case Click(id) { _on_click(m, id) }
+        case Input(id, s) { _on_input(m, id, s) }
+        case Submit(id) { m }
+        case Slide(id, v) { m }
+        case Select(id, opt) { m }
+        case Tick { m }
     }
 }
 
@@ -56,7 +56,7 @@ fun counter_card(m: Model) -> Widget {
     ).bg(m.theme.surface).rounded(16).pad(22)
 }
 
-fun greeting(m: Model) -> String {
+fun greeting(m: Model) -> str {
     if m.name == "" {
         return "type your name above"
     }
@@ -90,15 +90,15 @@ fun hello_theme(m: Model) -> Theme {
     return m.theme
 }
 
-fun hello_main() -> Bool {
+fun hello_main() -> bool {
     let win = WindowConfig.new().size(960, 600).title("quill: widgets")
-    return run_ui<Model>(
-        UiApp {
+    return run_ui[Model](
+        UiApp(
             init: hello_init,
             update: hello_update,
             view: hello_view,
             theme: hello_theme,
             window: win,
-        },
+        ),
     )
 }
