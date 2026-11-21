@@ -1,5 +1,5 @@
-import std/test { assert_true }
-import "./sys" { backend_init, backend_terminate }
+from std.test import assert_true
+from "./sys" import backend_init, backend_terminate
 
 fun test_backend_initializes() {
     assert_true(backend_init())

@@ -51,7 +51,7 @@ Add quill to your `rv.toml`:
 
 ```toml
 [dependencies]
-"github.com/martian56/quill" = "v0.1.2"
+"github.com/martian56/quill" = "v0.2.0"
 ```
 
 quill draws text with a font you supply. Point `Font.load` at any `.ttf` on disk;
@@ -60,31 +60,31 @@ the examples in this repo use the bundled `assets/fonts/Go-Regular.ttf`.
 ## Quick start
 
 ```rust
-import "github.com/martian56/quill" { Font, Theme, WindowConfig }
-import "github.com/martian56/quill/widget" { Widget, column, row, label, button }
-import "github.com/martian56/quill/app" { UiApp, UiEvent, run_ui }
+from "github.com/martian56/quill" import Font, Theme, WindowConfig
+from "github.com/martian56/quill/widget" import Widget, column, row, label, button
+from "github.com/martian56/quill/app" import UiApp, UiEvent, run_ui
 
-struct Model {
-    count: Int,
-    theme: Theme,
+class Model {
+    count: int
+    theme: Theme
 }
 
 fun init() -> Model {
     let font = Font.load("assets/Go-Regular.ttf")
-    return Model { count: 0, theme: Theme.dark(font) }
+    return Model(count: 0, theme: Theme.dark(font))
 }
 
 fun update(m: Model, e: UiEvent) -> Model {
     match e {
-        Click(id) -> {
+        case Click(id) {
             if id == "inc" {
-                return Model { count: m.count + 1, theme: m.theme }
+                return Model(count: m.count + 1, theme: m.theme)
             }
             if id == "dec" {
-                return Model { count: m.count - 1, theme: m.theme }
+                return Model(count: m.count - 1, theme: m.theme)
             }
-        },
-        _ -> {},
+        }
+        case _ {}
     }
     return m
 }
@@ -103,14 +103,14 @@ fun theme(m: Model) -> Theme {
 }
 
 fun main() {
-    run_ui<Model>(
-        UiApp {
+    run_ui[Model](
+        UiApp(
             init: init,
             update: update,
             view: view,
             theme: theme,
             window: WindowConfig.new().size(480, 320).title("counter"),
-        },
+        ),
     )
 }
 ```

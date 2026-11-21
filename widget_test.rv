@@ -1,22 +1,22 @@
-import std/test { assert_eq, assert_true, assert_false }
-import "./lib" { Theme, Font, Rect }
-import "./widget" { Widget, Align, Justify, column, row, button, label, slider, _hit, _drop_last, _slider_value_at, _tip_at }
-import "./layout" { measure, arrange }
-import "./paint" { VLine, caret_line }
+from std.test import assert_eq, assert_true, assert_false
+from "./lib" import Theme, Font, Rect
+from "./widget" import Widget, Align, Justify, column, row, button, label, slider, _hit, _drop_last, _slider_value_at, _tip_at
+from "./layout" import measure, arrange
+from "./paint" import VLine, caret_line
 
 // A fixed-size leaf that needs no font, so layout is testable headlessly.
-fun fixed(w: Int, h: Int) -> Widget {
-    let none: List<Widget> = []
+fun fixed(w: int, h: int) -> Widget {
+    let none: list[Widget] = []
     return column(none).width(w).height(h)
 }
 
-fun flexible(h: Int, weight: Int) -> Widget {
-    let none: List<Widget> = []
+fun flexible(h: int, weight: int) -> Widget {
+    let none: list[Widget] = []
     return column(none).height(h).grow(weight)
 }
 
 fun dummy_theme() -> Theme {
-    return Theme.dark(Font { id: 0 })
+    return Theme.dark(Font(id: 0))
 }
 
 fun test_column_measures_with_pad_and_gap() {
@@ -29,7 +29,7 @@ fun test_column_measures_with_pad_and_gap() {
 fun test_column_stacks_children() {
     let root = column([fixed(100, 40), fixed(80, 60)]).pad(10).gap(8)
     measure(root, dummy_theme())
-    arrange(root, Rect { x: 0, y: 0, w: 200, h: 300 })
+    arrange(root, Rect(x: 0, y: 0, w: 200, h: 300))
     let a = root.kids[0]
     let b = root.kids[1]
     assert_eq(a.box.x, 10)
@@ -45,7 +45,7 @@ fun test_row_grow_fills_leftover() {
     let b = flexible(30, 1)
     let root = row([a, b]).gap(10)
     measure(root, dummy_theme())
-    arrange(root, Rect { x: 0, y: 0, w: 200, h: 30 })
+    arrange(root, Rect(x: 0, y: 0, w: 200, h: 30))
     assert_eq(a.box.x, 0)
     assert_eq(a.box.w, 50)
     assert_eq(b.box.x, 60)
@@ -54,23 +54,17 @@ fun test_row_grow_fills_leftover() {
 
 fun test_hit_finds_button_by_box() {
     let b = button("go", "Go")
-    b.box = Rect { x: 10, y: 10, w: 100, h: 40 }
+    b.box = Rect(x: 10, y: 10, w: 100, h: 40)
     match _hit(b, 50, 30) {
-        Some(h) -> {
+        case Some(h) {
             assert_eq(h.id, "go")
             assert_false(h.input)
-        },
-        None -> {
-            assert_true(false)
-        },
+        }
+        case None { assert_true(false) }
     }
     match _hit(b, 200, 200) {
-        Some(h) -> {
-            assert_false(true)
-        },
-        None -> {
-            assert_true(true)
-        },
+        case Some(h) { assert_false(true) }
+        case None { assert_true(true) }
     }
 }
 
@@ -86,7 +80,7 @@ fun test_cross_align_center() {
     let a = fixed(100, 40)
     let root = column([a]).align(Align.Center)
     measure(root, dummy_theme())
-    arrange(root, Rect { x: 0, y: 0, w: 300, h: 300 })
+    arrange(root, Rect(x: 0, y: 0, w: 300, h: 300))
     assert_eq(a.box.x, 100)
     assert_eq(a.box.w, 100)
 }
@@ -95,7 +89,7 @@ fun test_main_justify_end() {
     let a = fixed(100, 40)
     let root = column([a]).justify(Justify.End)
     measure(root, dummy_theme())
-    arrange(root, Rect { x: 0, y: 0, w: 300, h: 300 })
+    arrange(root, Rect(x: 0, y: 0, w: 300, h: 300))
     assert_eq(a.box.y, 260)
 }
 
@@ -104,42 +98,34 @@ fun test_row_justify_between() {
     let b = fixed(50, 30)
     let root = row([a, b]).justify(Justify.Between)
     measure(root, dummy_theme())
-    arrange(root, Rect { x: 0, y: 0, w: 200, h: 30 })
+    arrange(root, Rect(x: 0, y: 0, w: 200, h: 30))
     assert_eq(a.box.x, 0)
     assert_eq(b.box.x, 150)
 }
 
 fun test_tip_at_finds_tipped_widget() {
     let plain = button("a", "A")
-    plain.box = Rect { x: 0, y: 0, w: 60, h: 30 }
+    plain.box = Rect(x: 0, y: 0, w: 60, h: 30)
     let tipped = button("b", "B").tip("hello")
-    tipped.box = Rect { x: 100, y: 0, w: 60, h: 30 }
+    tipped.box = Rect(x: 100, y: 0, w: 60, h: 30)
     let root = row([plain, tipped])
-    root.box = Rect { x: 0, y: 0, w: 200, h: 30 }
+    root.box = Rect(x: 0, y: 0, w: 200, h: 30)
     // Over the tipped button: returns it with its text.
     match _tip_at(root, 120, 15) {
-        Some(w) -> {
-            assert_eq(w.tip, "hello")
-        },
-        None -> {
-            assert_true(false)
-        },
+        case Some(w) { assert_eq(w.tip, "hello") }
+        case None { assert_true(false) }
     }
     // Over a widget with no tip: nothing.
     match _tip_at(root, 30, 15) {
-        Some(w) -> {
-            assert_false(true)
-        },
-        None -> {
-            assert_true(true)
-        },
+        case Some(w) { assert_false(true) }
+        case None { assert_true(true) }
     }
 }
 
 fun test_caret_line_maps_offset_to_row() {
     // Two words wrapped at a space: the space byte (5) is consumed, so the second
     // line starts at 6.
-    let gap: List<VLine> = [VLine { start: 0, end: 5 }, VLine { start: 6, end: 10 }]
+    let gap: list[VLine] = [VLine(start: 0, end: 5), VLine(start: 6, end: 10)]
     assert_eq(caret_line(gap, 0), 0)
     assert_eq(caret_line(gap, 3), 0)
     // At the end of the first line, before the consumed space, stays on line 0.
@@ -148,36 +134,24 @@ fun test_caret_line_maps_offset_to_row() {
     assert_eq(caret_line(gap, 10), 1)
     // A hard wrap has no consumed byte, so the boundary offset belongs to the
     // start of the next visual line.
-    let hard: List<VLine> = [VLine { start: 0, end: 4 }, VLine { start: 4, end: 8 }]
+    let hard: list[VLine] = [VLine(start: 0, end: 4), VLine(start: 4, end: 8)]
     assert_eq(caret_line(hard, 4), 1)
 }
 
 fun test_slider_value_at() {
     let s = slider("s", 0, 0, 100)
     // usable track = 218 - 2*9 = 200
-    s.box = Rect { x: 0, y: 0, w: 218, h: 24 }
+    s.box = Rect(x: 0, y: 0, w: 218, h: 24)
     match _slider_value_at(s, "s", 109) {
-        Some(v) -> {
-            assert_eq(v, 50)
-        },
-        None -> {
-            assert_true(false)
-        },
+        case Some(v) { assert_eq(v, 50) }
+        case None { assert_true(false) }
     }
     match _slider_value_at(s, "s", 0) {
-        Some(v) -> {
-            assert_eq(v, 0)
-        },
-        None -> {
-            assert_true(false)
-        },
+        case Some(v) { assert_eq(v, 0) }
+        case None { assert_true(false) }
     }
     match _slider_value_at(s, "s", 300) {
-        Some(v) -> {
-            assert_eq(v, 100)
-        },
-        None -> {
-            assert_true(false)
-        },
+        case Some(v) { assert_eq(v, 100) }
+        case None { assert_true(false) }
     }
 }

@@ -1,8 +1,8 @@
 // quill's widget runtime: the loop that turns a widget tree into an interactive
 // app. Import it alongside the widgets:
 //
-//     import "github.com/martian56/quill/widget" { column, label, button, input }
-//     import "github.com/martian56/quill/app" { UiApp, UiEvent, run_ui }
+//     from "github.com/martian56/quill/widget" import column, label, button, input
+//     from "github.com/martian56/quill/app" import UiApp, UiEvent, run_ui
 //
 //     fun update(m: Model, e: UiEvent) -> Model {
 //         return match e {
@@ -13,46 +13,46 @@
 //     }
 //
 //     fun main() {
-//         run_ui<Model>(UiApp { init, update, view, theme, window })
+//         run_ui[Model](UiApp(init: init, update: update, view: view, theme: theme, window: window))
 //     }
 
-import "./lib" { Theme, Rect, Window, WindowConfig, start, stop }
-import "./widget" { Widget, WidgetKind, _hit, _tip_at, _find_input, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at, _find_dropdown, _dd_option }
-import "./layout" { measure, arrange }
-import "./paint" { Interaction, Tooltip, paint, dd_option_at, paint_menu, paint_tooltip, caret_index_at, textarea_caret_at, textarea_lines, textarea_rows, caret_line, textarea_move_v, textarea_home, textarea_end }
-import std/string
-import std/collections { Map, empty_map }
+from "./lib" import Theme, Rect, Window, WindowConfig, start, stop
+from "./widget" import Widget, WidgetKind, _hit, _tip_at, _find_input, _find_input_value, _drop_last, _apply_scroll, _scroll_at, _scroll_id, _scroll_extent, _next_focus, _slider_value_at, _find_dropdown, _dd_option
+from "./layout" import measure, arrange
+from "./paint" import Interaction, Tooltip, paint, dd_option_at, paint_menu, paint_tooltip, caret_index_at, textarea_caret_at, textarea_lines, textarea_rows, caret_line, textarea_move_v, textarea_home, textarea_end
+import std.string
+from std.collections import Map, empty_map
 
-const KEY_ESCAPE: Int = 256
-const KEY_ENTER: Int = 257
-const KEY_TAB: Int = 258
-const KEY_BACKSPACE: Int = 259
-const KEY_RIGHT: Int = 262
-const KEY_LEFT: Int = 263
-const KEY_DELETE: Int = 261
-const KEY_HOME: Int = 268
-const KEY_END: Int = 269
-const KEY_C: Int = 67
-const KEY_V: Int = 86
-const KEY_A: Int = 65
-const KEY_X: Int = 88
-const KEY_UP: Int = 265
-const KEY_DOWN: Int = 264
+let KEY_ESCAPE: int = 256
+let KEY_ENTER: int = 257
+let KEY_TAB: int = 258
+let KEY_BACKSPACE: int = 259
+let KEY_RIGHT: int = 262
+let KEY_LEFT: int = 263
+let KEY_DELETE: int = 261
+let KEY_HOME: int = 268
+let KEY_END: int = 269
+let KEY_C: int = 67
+let KEY_V: int = 86
+let KEY_A: int = 65
+let KEY_X: int = 88
+let KEY_UP: int = 265
+let KEY_DOWN: int = 264
 
 // How long the cursor must rest before a widget's tooltip appears.
-const TOOLTIP_DELAY: Int = 600
+let TOOLTIP_DELAY: int = 600
 
-fun _is_cont(b: Int) -> Bool {
-    return b >= 128 && b < 192
+fun _is_cont(b: int) -> bool {
+    return b >= 128 and b < 192
 }
 
 // Byte index of the character boundary before i (skipping UTF-8 continuations).
-fun _prev_char(s: String, i: Int) -> Int {
+fun _prev_char(s: str, i: int) -> int {
     if i <= 0 {
         return 0
     }
-    let c = i - 1
-    let scanning = true
+    var c = i - 1
+    var scanning = true
     while scanning {
         if c == 0 {
             scanning = false
@@ -68,13 +68,13 @@ fun _prev_char(s: String, i: Int) -> Int {
 }
 
 // Byte index of the character boundary after i.
-fun _next_char(s: String, i: Int) -> Int {
+fun _next_char(s: str, i: int) -> int {
     let n = s.length()
     if i >= n {
         return n
     }
-    let c = i + 1
-    let scanning = true
+    var c = i + 1
+    var scanning = true
     while scanning {
         if c >= n {
             scanning = false
@@ -90,22 +90,22 @@ fun _next_char(s: String, i: Int) -> Int {
 }
 
 // Replace the byte range [start, end) of s with ins.
-fun _splice(s: String, start: Int, end: Int, ins: String) -> String {
+fun _splice(s: str, start: int, end: int, ins: str) -> str {
     return s.substring(0, start).concat(ins).concat(s.substring(end, s.length()))
 }
 
-fun _value_len(tree: Widget, id: String) -> Int {
+fun _value_len(tree: Widget, id: str) -> int {
     return match _find_input_value(tree, id) {
-        Some(v) -> v.length(),
-        None -> 0,
+        case Some(v) { v.length() }
+        case None { 0 }
     }
 }
 
-fun _kind_value(w: Widget) -> String {
+fun _kind_value(w: Widget) -> str {
     return match w.kind {
-        Input(id, value) -> value,
-        TextArea(id, value) -> value,
-        _ -> "",
+        case Input(id, value) { value }
+        case TextArea(id, value) { value }
+        case _ { "" }
     }
 }
 
@@ -114,33 +114,33 @@ fun _kind_value(w: Widget) -> String {
 fun _caret_at_click(
     tree: Widget,
     theme: Theme,
-    id: String,
-    x: Int,
-    y: Int,
-    tops: Map<String, Int>,
-) -> Int {
+    id: str,
+    x: int,
+    y: int,
+    tops: dict[str, int],
+) -> int {
     return match _find_input(tree, id) {
-        Some(inp) -> {
+        case Some(inp) {
             match inp.kind {
-                TextArea(tid, value) -> textarea_caret_at(inp, theme, x, y, tops.get_or(id, 0)),
-                _ -> caret_index_at(inp, theme, x),
+                case TextArea(tid, value) { textarea_caret_at(inp, theme, x, y, tops.get_or(id, 0)) }
+                case _ { caret_index_at(inp, theme, x) }
             }
-        },
-        None -> 0,
+        }
+        case None { 0 }
     }
 }
 
 // The key callback packs modifier bits above the key code; Control is bit 1.
-fun _key_code(packed: Int) -> Int {
+fun _key_code(packed: int) -> int {
     return packed % 512
 }
 
-fun _ctrl(packed: Int) -> Bool {
+fun _ctrl(packed: int) -> bool {
     let mods = packed / 512
     return (mods / 2) % 2 == 1
 }
 
-fun _shift(packed: Int) -> Bool {
+fun _shift(packed: int) -> bool {
     return (packed / 512) % 2 == 1
 }
 
@@ -149,26 +149,26 @@ fun _shift(packed: Int) -> Bool {
 // and its new text after typing or backspace.
 enum UiEvent {
     Tick,
-    Click(String),
-    Input(String, String),
-    Submit(String),
-    Slide(String, Int),
-    Select(String, String),
+    Click(str),
+    Input(str, str),
+    Submit(str),
+    Slide(str, int),
+    Select(str, str),
 }
 
 // A widget application: view returns a tree, update folds events into the model,
 // and theme reads the palette from the model (it holds the loaded font).
-struct UiApp<M> {
-    init: fun() -> M,
-    update: fun(M, UiEvent) -> M,
-    view: fun(M) -> Widget,
-    theme: fun(M) -> Theme,
-    window: WindowConfig,
+class UiApp[M] {
+    init: fun() -> M
+    update: fun(M, UiEvent) -> M
+    view: fun(M) -> Widget
+    theme: fun(M) -> Theme
+    window: WindowConfig
 }
 
 fun _layout(tree: Widget, theme: Theme, win: Window) {
     measure(tree, theme)
-    arrange(tree, Rect { x: 0, y: 0, w: win.width(), h: win.height() })
+    arrange(tree, Rect(x: 0, y: 0, w: win.width(), h: win.height()))
     return
 }
 
@@ -178,12 +178,12 @@ fun _layout(tree: Widget, theme: Theme, win: Window) {
 // hit-tests the laid-out tree, dispatches Click, Input, and Tick into update, and
 // repaints with hover, press, and focus feedback. Returns false if the backend
 // cannot start.
-fun run_ui<M>(app: UiApp<M>) -> Bool {
-    if !start() {
+fun run_ui[M](app: UiApp[M]) -> bool {
+    if not start() {
         return false
     }
     let win = Window.open(app.window)
-    if !win.ok() {
+    if not win.ok() {
         stop()
         return false
     }
@@ -192,10 +192,10 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
     let view_fn = app.view
     let theme_of = app.theme
 
-    let offsets = empty_map<String, Int>()
-    let ta_tops = empty_map<String, Int>()
-    let model = (app.init)()
-    let last = _draw(
+    let offsets = empty_map[str, int]()
+    let ta_tops = empty_map[str, int]()
+    var model = (app.init)()
+    var last = _draw(
         win,
         view_fn,
         theme_of,
@@ -212,21 +212,21 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         None,
     )
 
-    let was_down = false
-    let pressed: String? = None
-    let focused: String? = None
-    let dragging: String? = None
-    let text_sel: String? = None
-    let open_dd: String? = None
-    let caret = 0
-    let anchor = 0
-    let last_cursor = -1
-    let last_mx = -1
-    let last_my = -1
-    let hover_deadline = -1
-    let tip_shown = false
-    let wait_ms = _idle_timeout(focused)
-    let running = true
+    var was_down = false
+    var pressed: str? = None
+    var focused: str? = None
+    var dragging: str? = None
+    var text_sel: str? = None
+    var open_dd: str? = None
+    var caret = 0
+    var anchor = 0
+    var last_cursor = -1
+    var last_mx = -1
+    var last_my = -1
+    var hover_deadline = -1
+    var tip_shown = false
+    var wait_ms = _idle_timeout(focused)
+    var running = true
     while running {
         win.wait(wait_ms)
         if win.should_close() {
@@ -237,47 +237,47 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         let down = win.mouse_down()
         let theme = theme_of(model)
         _scroll(win, last, offsets, mx, my)
-        if down && !was_down {
+        if down and not was_down {
             // An open dropdown resolves the click first: pick an option, else close.
-            let consumed = false
+            var consumed = false
             let was_open = open_dd
             match open_dd {
-                Some(oid) -> {
+                case Some(oid) {
                     match _find_dropdown(last, oid) {
-                        Some(dd) -> {
+                        case Some(dd) {
                             match dd_option_at(dd, theme, mx, my) {
-                                Some(i) -> {
+                                case Some(i) {
                                     model = update_fn(model, UiEvent.Select(oid, _dd_option(dd, i)))
                                     consumed = true
-                                },
-                                None -> {},
+                                }
+                                case None {}
                             }
-                        },
-                        None -> {},
+                        }
+                        case None {}
                     }
                     open_dd = None
-                },
-                None -> {},
+                }
+                case None {}
             }
-            if !consumed {
+            if not consumed {
                 match _hit(last, mx, my) {
-                    Some(h) -> {
+                    case Some(h) {
                         match _find_dropdown(last, h.id) {
-                            Some(dd) -> {
+                            case Some(dd) {
                                 match was_open {
-                                    Some(prev) -> {
+                                    case Some(prev) {
                                         if prev != h.id {
                                             open_dd = Some(h.id)
                                         }
-                                    },
-                                    None -> {
+                                    }
+                                    case None {
                                         open_dd = Some(h.id)
-                                    },
+                                    }
                                 }
                                 pressed = None
                                 focused = None
-                            },
-                            None -> {
+                            }
+                            case None {
                                 if h.drag {
                                     dragging = Some(h.id)
                                     pressed = None
@@ -295,34 +295,34 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
                                         focused = None
                                     }
                                 }
-                            },
+                            }
                         }
-                    },
-                    None -> {
+                    }
+                    case None {
                         pressed = None
                         focused = None
-                    },
+                    }
                 }
             }
         }
         match dragging {
-            Some(sid) -> {
+            case Some(sid) {
                 if down {
                     model = _apply_slide(model, update_fn, last, sid, mx)
                 }
-            },
-            None -> {},
+            }
+            case None {}
         }
         // Dragging inside a focused field extends the selection to the cursor.
         match text_sel {
-            Some(tid) -> {
+            case Some(tid) {
                 if down {
                     caret = _caret_at_click(last, theme, tid, mx, my, ta_tops)
                 }
-            },
-            None -> {},
+            }
+            case None {}
         }
-        if was_down && !down {
+        if was_down and not down {
             model = _dispatch_click(model, update_fn, pressed, _hit_id(last, mx, my))
             pressed = None
             dragging = None
@@ -331,16 +331,16 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         was_down = down
 
         // Reflect what is under the cursor: I-beam over inputs, hand over others.
-        let cur_kind = 0
+        var cur_kind = 0
         match _hit(last, mx, my) {
-            Some(h) -> {
+            case Some(h) {
                 if h.input {
                     cur_kind = 1
                 } else {
                     cur_kind = 2
                 }
-            },
-            None -> {},
+            }
+            case None {}
         }
         if cur_kind != last_cursor {
             win.cursor(cur_kind)
@@ -361,37 +361,37 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
         // still cursor resting over a tip target reveals it after the delay. Held
         // buttons and drags suppress tips.
         let now = win.time_ms()
-        if mx != last_mx || my != last_my {
+        if mx != last_mx or my != last_my {
             hover_deadline = now + TOOLTIP_DELAY
             tip_shown = false
         }
         last_mx = mx
         last_my = my
-        let tip: Tooltip? = None
-        let over_tip = false
-        if !down {
+        var tip: Tooltip? = None
+        var over_tip = false
+        if not down {
             match _tip_at(last, mx, my) {
-                Some(tw) -> {
+                case Some(tw) {
                     over_tip = true
                     if now >= hover_deadline {
                         tip_shown = true
                     }
                     if tip_shown {
-                        tip = Some(Tooltip { text: tw.tip, box: tw.box })
+                        tip = Some(Tooltip(text: tw.tip, box: tw.box))
                     }
-                },
-                None -> {},
+                }
+                case None {}
             }
         }
 
         // Wake to reveal a pending tooltip; otherwise idle (or blink the caret).
         wait_ms = _idle_timeout(focused)
-        if over_tip && !tip_shown {
-            let remain = hover_deadline - now
+        if over_tip and not tip_shown {
+            var remain = hover_deadline - now
             if remain < 1 {
                 remain = 1
             }
-            if wait_ms == 0 || remain < wait_ms {
+            if wait_ms == 0 or remain < wait_ms {
                 wait_ms = remain
             }
         }
@@ -420,16 +420,16 @@ fun run_ui<M>(app: UiApp<M>) -> Bool {
 }
 
 // Apply this frame's wheel movement to the scroll container under the cursor.
-fun _scroll(win: Window, last: Widget, offsets: Map<String, Int>, mx: Int, my: Int) {
+fun _scroll(win: Window, last: Widget, offsets: dict[str, int], mx: int, my: int) {
     let dy = win.scroll_y()
     if dy == 0 {
         return
     }
     match _scroll_at(last, mx, my) {
-        Some(sw) -> {
+        case Some(sw) {
             let sid = _scroll_id(sw)
             let max_off = _scroll_extent(sw)
-            let next = offsets.get_or(sid, 0) - dy
+            var next = offsets.get_or(sid, 0) - dy
             if next < 0 {
                 next = 0
             }
@@ -437,36 +437,36 @@ fun _scroll(win: Window, last: Widget, offsets: Map<String, Int>, mx: Int, my: I
                 next = max_off
             }
             offsets.set(sid, next)
-        },
-        None -> {},
+        }
+        case None {}
     }
     return
 }
 
 // Sleep with no timeout when idle; wake ~twice a second while a field is focused
 // so its caret can blink.
-fun _idle_timeout(focused: String?) -> Int {
+fun _idle_timeout(focused: str?) -> int {
     return match focused {
-        Some(f) -> 500,
-        None -> 0,
+        case Some(f) { 500 }
+        case None { 0 }
     }
 }
 
 // Build, lay out, and paint one frame; returns the laid-out tree for hit-testing.
-fun _draw<M>(
+fun _draw[M](
     win: Window,
     view_fn: fun(M) -> Widget,
     theme_of: fun(M) -> Theme,
     model: M,
-    mx: Int,
-    my: Int,
-    down: Bool,
-    focused: String?,
-    offsets: Map<String, Int>,
-    caret: Int,
-    anchor: Int,
-    ta_top: Int,
-    open_dd: String?,
+    mx: int,
+    my: int,
+    down: bool,
+    focused: str?,
+    offsets: dict[str, int],
+    caret: int,
+    anchor: int,
+    ta_top: int,
+    open_dd: str?,
     tip: Tooltip?,
 ) -> Widget {
     let theme = theme_of(model)
@@ -480,66 +480,50 @@ fun _draw<M>(
         tree,
         f,
         theme,
-        Interaction {
+        Interaction(
             x: mx,
             y: my,
-            down,
+            down: down,
             focus: focused,
-            caret_on,
+            caret_on: caret_on,
             caret_pos: caret,
             sel_anchor: anchor,
-            ta_top,
-        },
+            ta_top: ta_top,
+        ),
     )
     match open_dd {
-        Some(oid) -> {
+        case Some(oid) {
             match _find_dropdown(tree, oid) {
-                Some(dd) -> {
-                    paint_menu(dd, f, theme, mx, my)
-                },
-                None -> {},
+                case Some(dd) { paint_menu(dd, f, theme, mx, my) }
+                case None {}
             }
-        },
-        None -> {},
+        }
+        case None {}
     }
     match tip {
-        Some(t) -> {
-            paint_tooltip(f, theme, t, win.width(), win.height())
-        },
-        None -> {},
+        case Some(t) { paint_tooltip(f, theme, t, win.width(), win.height()) }
+        case None {}
     }
     win.present()
     return tree
 }
 
 // Compute a slider's value from the cursor x and send a Slide event.
-fun _apply_slide<M>(
-    model: M,
-    update_fn: fun(M, UiEvent) -> M,
-    last: Widget,
-    id: String,
-    x: Int,
-) -> M {
+fun _apply_slide[M](model: M, update_fn: fun(M, UiEvent) -> M, last: Widget, id: str, x: int) -> M {
     match _slider_value_at(last, id, x) {
-        Some(v) -> {
+        case Some(v) {
             return update_fn(model, UiEvent.Slide(id, v))
-        },
-        None -> {},
+        }
+        case None {}
     }
     return model
 }
 
 // The id of a button under (x, y), ignoring inputs, for click release matching.
-fun _hit_id(w: Widget, x: Int, y: Int) -> String? {
+fun _hit_id(w: Widget, x: int, y: int) -> str? {
     return match _hit(w, x, y) {
-        Some(h) -> {
-            if h.input {
-                None
-            } else {
-                Some(h.id)
-            }
-        },
-        None -> None,
+        case Some(h) { None if h.input else Some(h.id) }
+        case None { None }
     }
 }
 
@@ -549,27 +533,27 @@ fun _hit_id(w: Widget, x: Int, y: Int) -> String? {
 fun _focused_ta_top(
     tree: Widget,
     theme: Theme,
-    focused: String?,
-    caret: Int,
-    tops: Map<String, Int>,
-) -> Int {
+    focused: str?,
+    caret: int,
+    tops: dict[str, int],
+) -> int {
     match focused {
-        Some(fid) -> {
+        case Some(fid) {
             match _find_input(tree, fid) {
-                Some(area) -> {
+                case Some(area) {
                     match area.kind {
-                        TextArea(id, value) -> {
+                        case TextArea(id, value) {
                             let lines = textarea_lines(area, theme)
                             let rows = textarea_rows(area, theme)
                             let cl = caret_line(lines, caret)
-                            let top = tops.get_or(fid, 0)
+                            var top = tops.get_or(fid, 0)
                             if cl < top {
                                 top = cl
                             }
                             if cl >= top + rows {
                                 top = cl - rows + 1
                             }
-                            let maxtop = lines.len() - rows
+                            var maxtop = lines.len() - rows
                             if maxtop < 0 {
                                 maxtop = 0
                             }
@@ -581,14 +565,14 @@ fun _focused_ta_top(
                             }
                             tops.set(fid, top)
                             return top
-                        },
-                        _ -> {},
+                        }
+                        case _ {}
                     }
-                },
-                None -> {},
+                }
+                case None {}
             }
-        },
-        None -> {},
+        }
+        case None {}
     }
     return 0
 }
@@ -596,17 +580,17 @@ fun _focused_ta_top(
 // What input handling produced: the folded model, the (possibly changed) focus,
 // and the caret and selection-anchor byte offsets in the focused field (equal
 // when there is no selection).
-struct InputOutcome<M> {
-    model: M,
-    focused: String?,
-    caret: Int,
-    anchor: Int,
+class InputOutcome[M] {
+    model: M
+    focused: str?
+    caret: int
+    anchor: int
 }
 
-fun _foc_len(tree: Widget, f: String?) -> Int {
+fun _foc_len(tree: Widget, f: str?) -> int {
     return match f {
-        Some(id) -> _value_len(tree, id),
-        None -> 0,
+        case Some(id) { _value_len(tree, id) }
+        case None { 0 }
     }
 }
 
@@ -617,51 +601,51 @@ fun _foc_len(tree: Widget, f: String?) -> Int {
 // Ctrl+A selects all, Ctrl+C copies, Ctrl+X cuts, Ctrl+V pastes. Enter submits,
 // Tab moves focus, Escape blurs. Keys are drained even with no focus so queues do
 // not pile up. Returns one Input event with the new value plus caret and anchor.
-fun _handle_input<M>(
+fun _handle_input[M](
     model: M,
     update_fn: fun(M, UiEvent) -> M,
     win: Window,
     theme: Theme,
     last: Widget,
-    focused: String?,
-    caret: Int,
-    anchor: Int,
-) -> InputOutcome<M> {
-    let has_focus = false
-    let cur = ""
-    let area: Widget? = None
+    focused: str?,
+    caret: int,
+    anchor: int,
+) -> InputOutcome[M] {
+    var has_focus = false
+    var cur = ""
+    var area: Widget? = None
     match focused {
-        Some(fid) -> {
+        case Some(fid) {
             has_focus = true
             match _find_input(last, fid) {
-                Some(inp) -> {
+                case Some(inp) {
                     cur = _kind_value(inp)
                     match inp.kind {
-                        TextArea(id, v) -> {
+                        case TextArea(id, v) {
                             area = Some(inp)
-                        },
-                        _ -> {},
+                        }
+                        case _ {}
                     }
-                },
-                None -> {},
+                }
+                case None {}
             }
-        },
-        None -> {},
+        }
+        case None {}
     }
-    let is_area = false
+    var is_area = false
     match area {
-        Some(a) -> {
+        case Some(a) {
             is_area = true
-        },
-        None -> {},
+        }
+        case None {}
     }
     caret = _clampi(caret, cur.length())
     anchor = _clampi(anchor, cur.length())
 
-    let changed = false
-    let c = win.poll_char()
+    var changed = false
+    var c = win.poll_char()
     while c >= 0 {
-        if c >= 32 && has_focus {
+        if c >= 32 and has_focus {
             let t = win.char_utf8(c)
             let lo = _sel_lo(caret, anchor)
             let hi = _sel_hi(caret, anchor)
@@ -673,8 +657,8 @@ fun _handle_input<M>(
         c = win.poll_char()
     }
 
-    let next_focus = focused
-    let k = win.poll_key()
+    var next_focus = focused
+    var k = win.poll_key()
     while k >= 0 {
         let key = _key_code(k)
         let ctrl = _ctrl(k)
@@ -714,96 +698,92 @@ fun _handle_input<M>(
                 }
             }
             if key == KEY_LEFT {
-                if sel && !shift {
+                if sel and not shift {
                     caret = lo
                 } else {
                     caret = _prev_char(cur, caret)
                 }
-                if !shift {
+                if not shift {
                     anchor = caret
                 }
             }
             if key == KEY_RIGHT {
-                if sel && !shift {
+                if sel and not shift {
                     caret = hi
                 } else {
                     caret = _next_char(cur, caret)
                 }
-                if !shift {
+                if not shift {
                     anchor = caret
                 }
             }
             if key == KEY_HOME {
                 if is_area {
                     match area {
-                        Some(a) -> {
+                        case Some(a) {
                             caret = textarea_home(a, theme, caret)
-                        },
-                        None -> {},
+                        }
+                        case None {}
                     }
                 } else {
                     caret = 0
                 }
-                if !shift {
+                if not shift {
                     anchor = caret
                 }
             }
             if key == KEY_END {
                 if is_area {
                     match area {
-                        Some(a) -> {
+                        case Some(a) {
                             caret = textarea_end(a, theme, caret)
-                        },
-                        None -> {},
+                        }
+                        case None {}
                     }
                 } else {
                     caret = cur.length()
                 }
-                if !shift {
+                if not shift {
                     anchor = caret
                 }
             }
-            if is_area && key == KEY_UP {
+            if is_area and key == KEY_UP {
                 match area {
-                    Some(a) -> {
+                    case Some(a) {
                         caret = textarea_move_v(a, theme, caret, -1)
-                    },
-                    None -> {},
+                    }
+                    case None {}
                 }
-                if !shift {
+                if not shift {
                     anchor = caret
                 }
             }
-            if is_area && key == KEY_DOWN {
+            if is_area and key == KEY_DOWN {
                 match area {
-                    Some(a) -> {
+                    case Some(a) {
                         caret = textarea_move_v(a, theme, caret, 1)
-                    },
-                    None -> {},
+                    }
+                    case None {}
                 }
-                if !shift {
+                if not shift {
                     anchor = caret
                 }
             }
-            if ctrl && key == KEY_A {
+            if ctrl and key == KEY_A {
                 anchor = 0
                 caret = cur.length()
             }
-            if ctrl && key == KEY_V {
+            if ctrl and key == KEY_V {
                 let clip = win.clipboard()
                 cur = _splice(cur, lo, hi, clip)
                 caret = lo + clip.length()
                 anchor = caret
                 changed = true
             }
-            if ctrl && key == KEY_C {
-                if sel {
-                    win.set_clipboard(cur.substring(lo, hi))
-                } else {
-                    win.set_clipboard(cur)
-                }
+            if ctrl and key == KEY_C {
+                win.set_clipboard(cur.substring(lo, hi)) if sel else win.set_clipboard(cur)
             }
-            if ctrl && key == KEY_X {
+            if ctrl and key == KEY_X {
                 if sel {
                     win.set_clipboard(cur.substring(lo, hi))
                     cur = _splice(cur, lo, hi, "")
@@ -822,7 +802,7 @@ fun _handle_input<M>(
             anchor = caret
         }
         if key == KEY_ENTER {
-            if is_area && has_focus {
+            if is_area and has_focus {
                 let lo = _sel_lo(caret, anchor)
                 let hi = _sel_hi(caret, anchor)
                 cur = _splice(cur, lo, hi, "\n")
@@ -831,10 +811,10 @@ fun _handle_input<M>(
                 changed = true
             } else {
                 match focused {
-                    Some(fid) -> {
+                    case Some(fid) {
                         model = update_fn(model, UiEvent.Submit(fid))
-                    },
-                    None -> {},
+                    }
+                    case None {}
                 }
             }
         }
@@ -843,16 +823,16 @@ fun _handle_input<M>(
 
     if changed {
         match focused {
-            Some(fid) -> {
+            case Some(fid) {
                 model = update_fn(model, UiEvent.Input(fid, cur))
-            },
-            None -> {},
+            }
+            case None {}
         }
     }
-    return InputOutcome { model, focused: next_focus, caret, anchor }
+    return InputOutcome(model: model, focused: next_focus, caret: caret, anchor: anchor)
 }
 
-fun _clampi(n: Int, hi: Int) -> Int {
+fun _clampi(n: int, hi: int) -> int {
     if n < 0 {
         return 0
     }
@@ -862,38 +842,38 @@ fun _clampi(n: Int, hi: Int) -> Int {
     return n
 }
 
-fun _sel_lo(a: Int, b: Int) -> Int {
+fun _sel_lo(a: int, b: int) -> int {
     if a < b {
         return a
     }
     return b
 }
 
-fun _sel_hi(a: Int, b: Int) -> Int {
+fun _sel_hi(a: int, b: int) -> int {
     if a > b {
         return a
     }
     return b
 }
 
-fun _dispatch_click<M>(
+fun _dispatch_click[M](
     model: M,
     update_fn: fun(M, UiEvent) -> M,
-    pressed: String?,
-    released: String?,
+    pressed: str?,
+    released: str?,
 ) -> M {
     match pressed {
-        Some(pid) -> {
+        case Some(pid) {
             match released {
-                Some(rid) -> {
+                case Some(rid) {
                     if pid == rid {
                         return update_fn(model, UiEvent.Click(pid))
                     }
-                },
-                None -> {},
+                }
+                case None {}
             }
-        },
-        None -> {},
+        }
+        case None {}
     }
     return model
 }

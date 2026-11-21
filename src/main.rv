@@ -1,26 +1,26 @@
 // Demo launcher. Run with: rvpm run -- [showcase|hello]
-import std/env { args }
-import std/io { println }
-import "../examples/showcase" { showcase_main }
-import "../examples/hello" { hello_main }
+from std.env import args
+from std.io import println
+from "../examples/showcase" import showcase_main
+from "../examples/hello" import hello_main
 
 fun main() {
     let a = args()
-    let pick = "showcase"
-    let i = 0
+    var pick = "showcase"
+    var i = 0
     while i < a.len() {
         if a[i] == "hello" {
             pick = "hello"
         }
         i = i + 1
     }
-    let ok = true
+    var ok = true
     if pick == "hello" {
         ok = hello_main()
     } else {
         ok = showcase_main()
     }
-    if !ok {
+    if not ok {
         println("quill could not open a window; run this on a desktop session")
     }
 }

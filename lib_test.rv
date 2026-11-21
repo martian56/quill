@@ -1,8 +1,8 @@
-import std/test { assert_true, assert_eq }
-import "./lib" { WindowConfig, Color, next, quit }
+from std.test import assert_true, assert_eq
+from "./lib" import WindowConfig, Color, next, quit
 
-struct Probe {
-    n: Int,
+class Probe {
+    n: int
 }
 
 fun test_window_config_builder() {
@@ -20,12 +20,12 @@ fun test_color_rgb() {
 }
 
 fun test_step_next_continues() {
-    let s = next(Probe { n: 7 })
-    assert_true(!s.quit)
+    let s = next(Probe(n: 7))
+    assert_true(not s.quit)
     assert_eq(s.model.n, 7)
 }
 
 fun test_step_quit_stops() {
-    let s = quit(Probe { n: 1 })
+    let s = quit(Probe(n: 1))
     assert_true(s.quit)
 }
