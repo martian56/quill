@@ -51,7 +51,7 @@ Add quill to your `rv.toml`:
 
 ```toml
 [dependencies]
-"github.com/martian56/quill" = "v0.1.2"
+"github.com/martian56/quill" = "v0.2.0"
 ```
 
 quill draws text with a font you supply. Point `Font.load` at any `.ttf` on disk;
